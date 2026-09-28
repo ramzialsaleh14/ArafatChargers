@@ -27,7 +27,7 @@
     },
     "assetBundlePatterns": ["**/*"],
     "web": {
-      "favicon": "./assets/favicon.png",
+      "favicon": "./assets/logo.png",
       "name": "Arafat Chargers",
       "shortName": "Arafat Chargers",
       "themeColor": "#0E7C7B",

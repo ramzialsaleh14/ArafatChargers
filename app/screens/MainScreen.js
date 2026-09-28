@@ -47,6 +47,8 @@ export default function MainScreen({ navigation, route }) {
     const [carPart2, setCarPart2] = useState('');
 
     const qrRef = useRef(null);
+    // Barcode field value that produced the result currently shown below.
+    const checkedInputRef = useRef('');
 
     const isArabic = lang.startsWith('ar');
     const hasBarcode = barcode.trim().length > 0;
@@ -101,13 +103,44 @@ export default function MainScreen({ navigation, route }) {
     // ------------------------------------------------------------------
     // Server call
     // ------------------------------------------------------------------
+    // Drops the result card (server QR + its info) and forgets its source code.
+    const clearResult = () => {
+        checkedInputRef.current = '';
+        setResult(null);
+        setCarPart1('');
+        setCarPart2('');
+    };
+
+    // The field is the source of truth: editing it invalidates the card below.
+    const onChangeBarcode = (text) => {
+        setBarcode(text);
+        if (checkedInputRef.current && text.trim() !== checkedInputRef.current) {
+            clearResult();
+        }
+    };
+
     const checkChargerInfo = useCallback(async (code) => {
-        const value = String(code ?? barcode ?? '').trim();
+        const inputValue = String(barcode ?? '').trim();
+        const explicit = code != null ? String(code).trim() : '';
+
+        // While the field still holds the code the card below came from, "Check"
+        // re-checks the server QR shown at the bottom instead of the field value.
+        const reuseServerQr =
+            !explicit &&
+            !!result &&
+            !result.error &&
+            !!result.qrcode &&
+            checkedInputRef.current === inputValue;
+
+        const value = explicit || (reuseServerQr ? String(result.qrcode).trim() : inputValue);
 
         if (!value) {
             Commons.okMsgAlert(i18n.t('pleaseEnterBarcode'));
             return;
         }
+
+        // Remember which field value the upcoming result belongs to.
+        checkedInputRef.current = explicit || inputValue;
 
         setIsChecking(true);
         setResult(null);
@@ -146,12 +179,14 @@ export default function MainScreen({ navigation, route }) {
         } finally {
             setIsChecking(false);
         }
-    }, [barcode, route?.params?.userName]);
+    }, [barcode, result, route?.params?.userName]);
 
     // Called by the scanner: fill the text input and auto trigger the check.
     const onBarcodeScanned = (scannedValue) => {
         setScannerVisible(false);
         setBarcode(scannedValue);
+        // A fresh scan replaces whatever the card below was showing.
+        clearResult();
         // Let the state settle (and the modal close) before hitting the server.
         setTimeout(() => {
             checkChargerInfo(scannedValue);
@@ -159,10 +194,8 @@ export default function MainScreen({ navigation, route }) {
     };
 
     const onReset = () => {
-        setResult(null);
+        clearResult();
         setBarcode('');
-        setCarPart1('');
-        setCarPart2('');
     };
 
     // ------------------------------------------------------------------
@@ -393,7 +426,7 @@ export default function MainScreen({ navigation, route }) {
                                 placeholder={i18n.t('barcodePlaceholder')}
                                 placeholderTextColor={Constants.brandMuted}
                                 value={barcode}
-                                onChangeText={setBarcode}
+                                onChangeText={onChangeBarcode}
                                 autoCapitalize="characters"
                                 autoCorrect={false}
                                 returnKeyType="done"
