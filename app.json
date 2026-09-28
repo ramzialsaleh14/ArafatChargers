@@ -1,0 +1,54 @@
+{
+  "expo": {
+    "name": "Arafat Chargers",
+    "slug": "arafatchargers",
+    "version": "1.0.0",
+    "sdkVersion": "54.0.0",
+    "platforms": ["ios", "android", "web"],
+    "orientation": "portrait",
+    "icon": "./assets/icon.png",
+    "splash": {
+      "image": "./assets/splash.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#0E7C7B"
+    },
+    "android": {
+      "package": "com.puresoft.ArafatChargers",
+      "versionCode": 1,
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/logo.png",
+        "backgroundColor": "#FFFFFF"
+      },
+      "permissions": [
+        "CAMERA",
+        "READ_EXTERNAL_STORAGE",
+        "WRITE_EXTERNAL_STORAGE"
+      ]
+    },
+    "assetBundlePatterns": ["**/*"],
+    "web": {
+      "favicon": "./assets/favicon.png",
+      "name": "Arafat Chargers",
+      "shortName": "Arafat Chargers",
+      "themeColor": "#0E7C7B",
+      "backgroundColor": "#F2F6F6"
+    },
+    "plugins": [
+      "expo-localization",
+      [
+        "expo-camera",
+        {
+          "cameraPermission": "Arafat Chargers needs access to your camera to scan charger barcodes."
+        }
+      ]
+    ],
+    "runtimeVersion": "1.0.0",
+    "ios": {
+      "bundleIdentifier": "com.puresoft.ArafatChargers",
+      "infoPlist": {
+        "ITSAppUsesNonExemptEncryption": false,
+        "NSCameraUsageDescription": "Arafat Chargers needs access to your camera to scan charger barcodes."
+      }
+    }
+  }
+}
