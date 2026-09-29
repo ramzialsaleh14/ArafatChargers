@@ -17,8 +17,8 @@ app shows the charger information returned by the server.
 - **Result handling** (based on the JSON returned by `getChargerInfo`)
   - `ERROR = true` → shows **No Data Found**.
   - `PAID = true` → shows a full **green screen**.
-  - otherwise → renders `QRCODE` as a real QR code, the `QRCODE` text underneath,
-    plus `KWH` and `TOTAL_AMOUNT`, with a **Print** button.
+  - otherwise → renders `QRCODE` as a **Code 128** barcode, the `QRCODE` text
+    underneath, plus `KWH` and `TOTAL_AMOUNT`, with a **Print** button.
 - **Arabic / English** support with a language toggle (persisted between sessions).
 
 ## Server call

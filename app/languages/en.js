@@ -48,8 +48,8 @@ export default {
   noDataFound: "No Data Found",
   noDataFoundDescription:
     "No charger information was found for this barcode. Please try again.",
-  qrCode: "QR Code",
-  qrCodeText: "QR Code Text",
+  barcode: "Barcode",
+  barcodeText: "Barcode Text",
   kwh: "KWH",
   totalAmount: "Total Amount",
   carNumber: "Car Number",

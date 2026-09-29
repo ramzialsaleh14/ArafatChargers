@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useCallback } from 'react';
+import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import {
     StyleSheet,
     Text,
@@ -12,12 +12,13 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { MaterialIcons } from '@expo/vector-icons';
-import QRCode from 'react-native-qrcode-svg';
+import { SvgXml } from 'react-native-svg';
 
 import i18n from '../languages/langStrings';
 import * as Commons from '../utils/Commons';
 import * as ServerOperations from '../utils/ServerOperations';
 import * as Constants from '../utils/Constants';
+import { getCode128Barcode } from '../utils/Barcode';
 import { LOGO_DATA_URL } from '../utils/PrintLogo';
 import ProgressDialog from '../components/ProgressDialog';
 import BarcodeScannerModal from '../components/BarcodeScannerModal';
@@ -45,8 +46,9 @@ export default function MainScreen({ navigation, route }) {
     // Car plate is captured as two free-form parts shown as "00-00000".
     const [carPart1, setCarPart1] = useState('');
     const [carPart2, setCarPart2] = useState('');
+    // Measured width available for the on-screen barcode.
+    const [barcodeBoxWidth, setBarcodeBoxWidth] = useState(0);
 
-    const qrRef = useRef(null);
     // Barcode field value that produced the result currently shown below.
     const checkedInputRef = useRef('');
 
@@ -55,6 +57,12 @@ export default function MainScreen({ navigation, route }) {
     const showPaidScreen = !!result && !result.error && result.paid;
     const carNumber =
         carPart1.trim() && carPart2.trim() ? `${carPart1.trim()}-${carPart2.trim()}` : '';
+
+    // Code 128 barcode (SVG) for the code returned by the server.
+    const barcodeModel = useMemo(
+        () => (result && !result.error && result.qrcode ? getCode128Barcode(result.qrcode) : null),
+        [result]
+    );
 
     // ------------------------------------------------------------------
     // Header info + clock
@@ -201,7 +209,7 @@ export default function MainScreen({ navigation, route }) {
     // ------------------------------------------------------------------
     // Printing
     // ------------------------------------------------------------------
-    const buildPrintHtml = (qrImageDataUrl) => {
+    const buildPrintHtml = (barcodeSvg) => {
         const direction = isArabic ? 'rtl' : 'ltr';
         const rows = [
             [i18n.t('carNumber'), carNumber],
@@ -240,9 +248,9 @@ export default function MainScreen({ navigation, route }) {
   .logo-wrap img { width: 46mm; height: 46mm; object-fit: contain; }
   .sub { font-size: 9px; color: #6B7B85; margin-bottom: 5mm; }
   .card { padding: 0; border: none; }
-  .qr-wrap { text-align: center; margin-bottom: 3mm; }
-  .qr-wrap img { width: 46mm; height: 46mm; display: block; margin: 0 auto; }
-  .qr-text { font-size: 8px; word-break: break-all; margin-top: 2mm; }
+  .barcode-wrap { text-align: center; margin-bottom: 3mm; }
+  .barcode-wrap svg { display: block; width: 100%; height: auto; }
+  .barcode-text { font-size: 8px; word-break: break-all; margin-top: 2mm; }
   table { width: 100%; border-collapse: collapse; margin-top: 2mm; }
   td { padding: 1.5mm 0; border-bottom: 1px dotted #B9C6CA; font-size: 10px; }
   td.label { color: #6B7B85; width: 45%; }
@@ -254,9 +262,9 @@ export default function MainScreen({ navigation, route }) {
   <div class="logo-wrap"><img src="${LOGO_DATA_URL}" alt="${i18n.t('appTitle')}" /></div>
   <div class="sub">${i18n.t('resultTitle')} &middot; ${new Date().toLocaleString(isArabic ? 'ar' : 'en-GB')}</div>
   <div class="card">
-    <div class="qr-wrap">
-      ${qrImageDataUrl ? `<img src="${qrImageDataUrl}" alt="QR" />` : ''}
-      <div class="qr-text">${result?.qrcode || ''}</div>
+    <div class="barcode-wrap">
+      ${barcodeSvg || ''}
+      <div class="barcode-text">${result?.qrcode || ''}</div>
     </div>
     <table>${rows}</table>
   </div>
@@ -276,8 +284,8 @@ export default function MainScreen({ navigation, route }) {
 
         setIsPrinting(true);
 
-        const printHtml = async (qrImageDataUrl) => {
-            const html = buildPrintHtml(qrImageDataUrl);
+        const printHtml = async (barcodeSvg) => {
+            const html = buildPrintHtml(barcodeSvg);
 
             if (Platform.OS === 'web') {
                 const win = window.open('', '_blank');
@@ -307,7 +315,7 @@ export default function MainScreen({ navigation, route }) {
             const storedUser = await Commons.getFromAS('userID');
             const user = storedUser || route?.params?.userName || '';
 
-            // The service keys off the QR code returned by the check call,
+            // The service keys off the code returned by the check call,
             // not the raw scanned barcode.
             const saved = await ServerOperations.setChargerCar(user, result.qrcode, carNumber);
 
@@ -316,33 +324,8 @@ export default function MainScreen({ navigation, route }) {
                 return;
             }
 
-            if (qrRef.current && typeof qrRef.current.toDataURL === 'function') {
-                await new Promise((resolve) => {
-                    let settled = false;
-                    const done = () => {
-                        if (!settled) {
-                            settled = true;
-                            resolve();
-                        }
-                    };
-                    // Safety net in case the callback never fires.
-                    setTimeout(done, 1500);
-                    try {
-                        qrRef.current.toDataURL(async (data) => {
-                            try {
-                                await printHtml(data ? `data:image/png;base64,${data}` : null);
-                            } finally {
-                                done();
-                            }
-                        });
-                    } catch (error) {
-                        console.error('QR export failed:', error);
-                        printHtml(null).finally(done);
-                    }
-                });
-            } else {
-                await printHtml(null);
-            }
+            // Embed the Code 128 barcode as inline SVG (no raster export needed).
+            await printHtml(barcodeModel ? barcodeModel.svg : null);
         } finally {
             setIsPrinting(false);
         }
@@ -491,17 +474,26 @@ export default function MainScreen({ navigation, route }) {
                             </View>
 
                             {result.qrcode ? (
-                                <View style={styles.qrWrap}>
-                                    <QRCode
-                                        value={result.qrcode}
-                                        size={200}
-                                        color={Constants.brandText}
-                                        backgroundColor="#FFFFFF"
-                                        getRef={(ref) => {
-                                            qrRef.current = ref;
-                                        }}
-                                    />
-                                    <Text style={styles.qrCodeText}>{result.qrcode}</Text>
+                                <View
+                                    style={styles.barcodeWrap}
+                                    onLayout={(event) =>
+                                        setBarcodeBoxWidth(
+                                            // inner width = measured - 2*16 padding - 2*1 border
+                                            Math.max(0, event.nativeEvent.layout.width - 34)
+                                        )
+                                    }
+                                >
+                                    {barcodeModel && barcodeModel.width > 0 && barcodeBoxWidth > 0 ? (
+                                        <SvgXml
+                                            xml={barcodeModel.svg}
+                                            width={barcodeBoxWidth}
+                                            height={
+                                                (barcodeBoxWidth * barcodeModel.height) /
+                                                barcodeModel.width
+                                            }
+                                        />
+                                    ) : null}
+                                    <Text style={styles.barcodeText}>{result.qrcode}</Text>
                                 </View>
                             ) : null}
 
@@ -820,7 +812,7 @@ const styles = StyleSheet.create({
     },
 
     // Result ---------------------------------------------------------------
-    qrWrap: {
+    barcodeWrap: {
         alignItems: 'center',
         marginTop: 16,
         padding: 16,
@@ -829,7 +821,7 @@ const styles = StyleSheet.create({
         borderWidth: 1,
         borderColor: Constants.brandBorder,
     },
-    qrCodeText: {
+    barcodeText: {
         marginTop: 12,
         fontSize: 13,
         color: Constants.brandText,
