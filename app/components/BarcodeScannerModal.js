@@ -15,10 +15,10 @@ import i18n from "../languages/langStrings";
 import * as Commons from "../utils/Commons";
 import * as Constants from "../utils/Constants";
 
-// The charger labels carry a Code 128 (1D) barcode, so that is the primary
-// format. The remaining linear formats are kept as fallbacks for legacy
-// labels; QR codes are no longer used by the app.
+// Charger labels carry a QR code and/or a Code 128 (1D) barcode; both are
+// enabled and listed first. The remaining formats are kept as fallbacks.
 const BARCODE_TYPES = [
+  "qr",
   "code128",
   "code39",
   "code93",
@@ -32,6 +32,10 @@ const BARCODE_TYPES = [
   "pdf417",
   "datamatrix",
 ];
+
+// Give the camera a moment to run its first autofocus pass before we start
+// accepting decodes - the first frames are usually too blurry to read.
+const FOCUS_SETTLE_MS = 1000;
 
 /**
  * Full screen camera modal that scans a barcode and reports the first
@@ -73,7 +77,7 @@ export default function BarcodeScannerModal({ visible, onScanned, onClose }) {
     if (!visible || !ready) {
       return;
     }
-    const timer = setTimeout(() => setArmed(true), 500);
+    const timer = setTimeout(() => setArmed(true), FOCUS_SETTLE_MS);
     return () => clearTimeout(timer);
   }, [visible, ready]);
 
@@ -121,10 +125,15 @@ export default function BarcodeScannerModal({ visible, onScanned, onClose }) {
         <CameraView
           style={StyleSheet.absoluteFill}
           facing="back"
-          // expo-camera forwards this to the WebRTC "focusMode" constraint on
-          // web, where "off" resolves to "manual" (a frozen lens). Native maps
-          // "off" to continuous autofocus on iOS and to CameraX-managed focus
-          // on Android, so only web needs "on".
+          // expo-camera's FocusMode values are inverted from what the names
+          // suggest:
+          //   'off' -> keep focusing automatically (continuous AF)
+          //   'on'  -> autofocus once, then lock the lens
+          // Continuous is what a hand-held barcode scan needs, and it is the
+          // native default (iOS: AVCaptureDevice.continuousAutoFocus, Android:
+          // CameraX-managed focus), so native passes 'off'. The web build is
+          // the exception: it maps 'off' to focusMode 'manual' (a frozen lens)
+          // and 'on' to 'continuous', so web must pass 'on'.
           autofocus={isWeb ? "on" : "off"}
           // Native toggles the torch with `enableTorch`; the web implementation
           // reads it from `flash` instead.

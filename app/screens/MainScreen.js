@@ -18,7 +18,7 @@ import i18n from '../languages/langStrings';
 import * as Commons from '../utils/Commons';
 import * as ServerOperations from '../utils/ServerOperations';
 import * as Constants from '../utils/Constants';
-import { getCode128Barcode } from '../utils/Barcode';
+import { getCode128Barcode, getQrCode } from '../utils/Barcode';
 import { LOGO_DATA_URL } from '../utils/PrintLogo';
 import ProgressDialog from '../components/ProgressDialog';
 import BarcodeScannerModal from '../components/BarcodeScannerModal';
@@ -58,9 +58,14 @@ export default function MainScreen({ navigation, route }) {
     const carNumber =
         carPart1.trim() && carPart2.trim() ? `${carPart1.trim()}-${carPart2.trim()}` : '';
 
-    // Code 128 barcode (SVG) for the code returned by the server.
+    // Code 128 barcode + QR code (both rendered from SVG) for the code the
+    // server returned.
     const barcodeModel = useMemo(
         () => (result && !result.error && result.qrcode ? getCode128Barcode(result.qrcode) : null),
+        [result]
+    );
+    const qrModel = useMemo(
+        () => (result && !result.error && result.qrcode ? getQrCode(result.qrcode) : null),
         [result]
     );
 
@@ -209,8 +214,13 @@ export default function MainScreen({ navigation, route }) {
     // ------------------------------------------------------------------
     // Printing
     // ------------------------------------------------------------------
-    const buildPrintHtml = (barcodeSvg) => {
+    const buildPrintHtml = ({ qrSvg, barcodeSvg }) => {
         const direction = isArabic ? 'rtl' : 'ltr';
+        // Keep the Code 128 bars square-ish on the 58mm roll (~52mm usable).
+        const barcodeHeightMm =
+            barcodeModel && barcodeModel.width
+                ? Math.round((52 * barcodeModel.height) / barcodeModel.width)
+                : 14;
         const rows = [
             [i18n.t('carNumber'), carNumber],
             [i18n.t('kwh'), result?.kwh],
@@ -248,9 +258,10 @@ export default function MainScreen({ navigation, route }) {
   .logo-wrap img { width: 46mm; height: 46mm; object-fit: contain; }
   .sub { font-size: 9px; color: #6B7B85; margin-bottom: 5mm; }
   .card { padding: 0; border: none; }
-  .barcode-wrap { text-align: center; margin-bottom: 3mm; }
-  .barcode-wrap svg { display: block; width: 100%; height: auto; }
-  .barcode-text { font-size: 8px; word-break: break-all; margin-top: 2mm; }
+  .code-wrap { text-align: center; margin-bottom: 3mm; }
+  .qr-code svg { display: block; width: 34mm; height: 34mm; margin: 0 auto 2mm; }
+  .bar-code svg { display: block; width: 100%; height: ${barcodeHeightMm}mm; }
+  .code-text { font-size: 8px; word-break: break-all; margin-top: 2mm; }
   table { width: 100%; border-collapse: collapse; margin-top: 2mm; }
   td { padding: 1.5mm 0; border-bottom: 1px dotted #B9C6CA; font-size: 10px; }
   td.label { color: #6B7B85; width: 45%; }
@@ -262,9 +273,10 @@ export default function MainScreen({ navigation, route }) {
   <div class="logo-wrap"><img src="${LOGO_DATA_URL}" alt="${i18n.t('appTitle')}" /></div>
   <div class="sub">${i18n.t('resultTitle')} &middot; ${new Date().toLocaleString(isArabic ? 'ar' : 'en-GB')}</div>
   <div class="card">
-    <div class="barcode-wrap">
-      ${barcodeSvg || ''}
-      <div class="barcode-text">${result?.qrcode || ''}</div>
+    <div class="code-wrap">
+      <div class="qr-code">${qrSvg || ''}</div>
+      <div class="bar-code">${barcodeSvg || ''}</div>
+      <div class="code-text">${result?.qrcode || ''}</div>
     </div>
     <table>${rows}</table>
   </div>
@@ -284,8 +296,8 @@ export default function MainScreen({ navigation, route }) {
 
         setIsPrinting(true);
 
-        const printHtml = async (barcodeSvg) => {
-            const html = buildPrintHtml(barcodeSvg);
+        const printHtml = async (codes) => {
+            const html = buildPrintHtml(codes);
 
             if (Platform.OS === 'web') {
                 const win = window.open('', '_blank');
@@ -324,8 +336,11 @@ export default function MainScreen({ navigation, route }) {
                 return;
             }
 
-            // Embed the Code 128 barcode as inline SVG (no raster export needed).
-            await printHtml(barcodeModel ? barcodeModel.svg : null);
+            // Embed the QR code and the Code 128 barcode as inline SVG.
+            await printHtml({
+                qrSvg: qrModel ? qrModel.svg : null,
+                barcodeSvg: barcodeModel ? barcodeModel.svg : null,
+            });
         } finally {
             setIsPrinting(false);
         }
@@ -475,7 +490,7 @@ export default function MainScreen({ navigation, route }) {
 
                             {result.qrcode ? (
                                 <View
-                                    style={styles.barcodeWrap}
+                                    style={styles.codeWrap}
                                     onLayout={(event) =>
                                         setBarcodeBoxWidth(
                                             // inner width = measured - 2*16 padding - 2*1 border
@@ -483,8 +498,16 @@ export default function MainScreen({ navigation, route }) {
                                         )
                                     }
                                 >
+                                    {qrModel && qrModel.width > 0 && barcodeBoxWidth > 0 ? (
+                                        <SvgXml
+                                            xml={qrModel.svg}
+                                            width={Math.min(barcodeBoxWidth, 190)}
+                                            height={Math.min(barcodeBoxWidth, 190)}
+                                        />
+                                    ) : null}
                                     {barcodeModel && barcodeModel.width > 0 && barcodeBoxWidth > 0 ? (
                                         <SvgXml
+                                            style={styles.barcodeSvg}
                                             xml={barcodeModel.svg}
                                             width={barcodeBoxWidth}
                                             height={
@@ -493,7 +516,7 @@ export default function MainScreen({ navigation, route }) {
                                             }
                                         />
                                     ) : null}
-                                    <Text style={styles.barcodeText}>{result.qrcode}</Text>
+                                    <Text style={styles.codeText}>{result.qrcode}</Text>
                                 </View>
                             ) : null}
 
@@ -812,7 +835,7 @@ const styles = StyleSheet.create({
     },
 
     // Result ---------------------------------------------------------------
-    barcodeWrap: {
+    codeWrap: {
         alignItems: 'center',
         marginTop: 16,
         padding: 16,
@@ -821,7 +844,10 @@ const styles = StyleSheet.create({
         borderWidth: 1,
         borderColor: Constants.brandBorder,
     },
-    barcodeText: {
+    barcodeSvg: {
+        marginTop: 18,
+    },
+    codeText: {
         marginTop: 12,
         fontSize: 13,
         color: Constants.brandText,
