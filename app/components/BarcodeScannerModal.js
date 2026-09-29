@@ -15,21 +15,22 @@ import i18n from "../languages/langStrings";
 import * as Commons from "../utils/Commons";
 import * as Constants from "../utils/Constants";
 
-// Barcode formats that a charger label may realistically use.
+// The charger labels carry a Code 128 (1D) barcode, so that is the primary
+// format. The remaining linear formats are kept as fallbacks for legacy
+// labels; QR codes are no longer used by the app.
 const BARCODE_TYPES = [
-  "qr",
-  "aztec",
-  "pdf417",
-  "datamatrix",
+  "code128",
   "code39",
   "code93",
-  "code128",
   "codabar",
+  "itf14",
   "ean13",
   "ean8",
   "upc_a",
   "upc_e",
-  "itf14",
+  "aztec",
+  "pdf417",
+  "datamatrix",
 ];
 
 /**
