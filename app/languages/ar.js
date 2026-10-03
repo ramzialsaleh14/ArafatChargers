@@ -63,6 +63,32 @@ export default {
   printFailed: "فشلت الطباعة. يرجى المحاولة مرة أخرى.",
   loadFailed: "فشل تحميل معلومات الشاحن. يرجى المحاولة مرة أخرى.",
 
+  // Pending orders
+  pendingOrders: "الطلبات المعلقة",
+  pendingOrdersSubtitle: "اختر الشاحن ونطاق التاريخ، ثم اضغط على الطلب غير المدفوع لطباعته.",
+  chargerLabel: "الشاحن",
+  chargerPlaceholder: "اختر الشاحن",
+  chargerRequired: "يرجى اختيار الشاحن أولاً.",
+  selectCharger: "اختيار الشاحن",
+  noChargersFound: "لا توجد شواحن متاحة.",
+  connectorLabel: "المنفذ",
+  connectorPlaceholder: "الكل",
+  fromDateLabel: "من تاريخ ووقت",
+  toDateLabel: "إلى تاريخ ووقت",
+  datePlaceholder: "يوم/شهر/سنة",
+  invalidDate: "يرجى إدخال تاريخ ووقت صحيحين.",
+  timeLabel: "الوقت",
+  now: "الآن",
+  apply: "تطبيق",
+  showOrders: "عرض الطلبات",
+  ordersLoadFailed: "فشل تحميل الطلبات. يرجى المحاولة مرة أخرى.",
+  noOrdersFound: "لا توجد طلبات لهذا الاختيار.",
+  dateTimeLabel: "التاريخ والوقت",
+  userLabel: "المستخدم",
+  invNoLabel: "رقم الفاتورة",
+  unpaid: "غير مدفوع",
+  tapToPrint: "اضغط للطباعة",
+
   // Language
   languageLabel: "English",
 

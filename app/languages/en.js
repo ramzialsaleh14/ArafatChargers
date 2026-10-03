@@ -65,6 +65,33 @@ export default {
   printFailed: "Printing failed. Please try again.",
   loadFailed: "Failed to load charger information. Please try again.",
 
+  // Pending orders
+  pendingOrders: "Pending Orders",
+  pendingOrdersSubtitle:
+    "Pick a charger and date range, then tap an unpaid order to print it.",
+  chargerLabel: "Charger",
+  chargerPlaceholder: "Select charger",
+  chargerRequired: "Please select a charger first.",
+  selectCharger: "Select Charger",
+  noChargersFound: "No chargers available.",
+  connectorLabel: "Connector",
+  connectorPlaceholder: "All",
+  fromDateLabel: "From date & time",
+  toDateLabel: "To date & time",
+  datePlaceholder: "dd/mm/yyyy",
+  invalidDate: "Please enter a valid date and time.",
+  timeLabel: "Time",
+  now: "Now",
+  apply: "Apply",
+  showOrders: "Show Orders",
+  ordersLoadFailed: "Failed to load orders. Please try again.",
+  noOrdersFound: "No orders found for this selection.",
+  dateTimeLabel: "Date & Time",
+  userLabel: "User",
+  invNoLabel: "Invoice No",
+  unpaid: "Unpaid",
+  tapToPrint: "Tap to print",
+
   // Language
   languageLabel: "العربية",
 

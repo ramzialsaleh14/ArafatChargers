@@ -67,6 +67,8 @@ export const networkError_code = 100;
 export const CHECK_LOGIN = "CHECK.LOGIN";
 export const GET_CHARGER_INFO = "GET.CHARGER.INFO";
 export const SET_CHARGER_CAR = "SET.CHARGER.CAR";
+export const GET_CHARGERS = "GET.CHARGERS";
+export const GET_PENDING_ORDERS = "GET.PENDING.ORDERS";
 export const CHANGE_PASSWORD = "CHANGE.PASSWORD";
 
 // Small helper so screens can adapt layouts for Arabic.

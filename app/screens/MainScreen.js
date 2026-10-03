@@ -22,6 +22,8 @@ import { getCode128Barcode, getQrCode } from '../utils/Barcode';
 import { LOGO_DATA_URL } from '../utils/PrintLogo';
 import ProgressDialog from '../components/ProgressDialog';
 import BarcodeScannerModal from '../components/BarcodeScannerModal';
+import OptionPickerModal from '../components/OptionPickerModal';
+import DatePickerModal from '../components/DatePickerModal';
 
 // Normalises the many flavours a boolean flag can arrive in.
 const truthy = (value) =>
@@ -31,6 +33,24 @@ const truthy = (value) =>
 const serverMessage = (resp) => {
     const value = resp?.MSG ?? resp?.msg;
     return value != null && String(value).trim() ? String(value).trim() : '';
+};
+
+// Splits an order's car plate ("00-00000", "00 00000" or "0000000") into the
+// two parts used by the car inputs.
+const splitCarPlate = (value) => {
+    const text = String(value ?? '').trim();
+    if (!text) {
+        return ['', ''];
+    }
+    const parts = text.split(/[\s\-.]+/).filter(Boolean);
+    if (parts.length >= 2) {
+        return [parts[0], parts.slice(1).join('')];
+    }
+    // No separator: assume the last five characters are the second part.
+    if (text.length > 5) {
+        return [text.slice(0, text.length - 5), text.slice(-5)];
+    }
+    return [text, ''];
 };
 
 export default function MainScreen({ navigation, route }) {
@@ -51,6 +71,25 @@ export default function MainScreen({ navigation, route }) {
 
     // Barcode field value that produced the result currently shown below.
     const checkedInputRef = useRef('');
+    // Lets the pending-order tap scroll back up to the result card.
+    const scrollRef = useRef(null);
+
+    // Pending orders section -------------------------------------------
+    const [ordersExpanded, setOrdersExpanded] = useState(false);
+    const [chargers, setChargers] = useState([]);
+    const [chargersLoaded, setChargersLoaded] = useState(false);
+    const [isLoadingChargers, setIsLoadingChargers] = useState(false);
+    const [chargerPickerVisible, setChargerPickerVisible] = useState(false);
+    const [selectedCharger, setSelectedCharger] = useState('');
+    const [connectorFilter, setConnectorFilter] = useState('');
+    // Defaults are the current date and time in yyyy-MM-dd HH:mm:ss.
+    const [fromDateTime, setFromDateTime] = useState(() => Commons.formatDateTime(new Date()));
+    const [toDateTime, setToDateTime] = useState(() => Commons.formatDateTime(new Date()));
+    // Which date field the calendar sheet is editing: 'from' | 'to' | null.
+    const [datePickerTarget, setDatePickerTarget] = useState(null);
+    const [orders, setOrders] = useState([]);
+    const [ordersLoaded, setOrdersLoaded] = useState(false);
+    const [isLoadingOrders, setIsLoadingOrders] = useState(false);
 
     const isArabic = lang.startsWith('ar');
     const hasBarcode = barcode.trim().length > 0;
@@ -209,6 +248,91 @@ export default function MainScreen({ navigation, route }) {
     const onReset = () => {
         clearResult();
         setBarcode('');
+    };
+
+    // ------------------------------------------------------------------
+    // Pending orders
+    // ------------------------------------------------------------------
+    const loadChargers = useCallback(async () => {
+        setIsLoadingChargers(true);
+        try {
+            const storedUser = await Commons.getFromAS('userID');
+            const user = storedUser || route?.params?.userName || '';
+            const list = (await ServerOperations.getChargers(user)) || [];
+            setChargers(list);
+            // A single charger is an easy win: preselect it.
+            if (list.length === 1) {
+                setSelectedCharger(list[0]);
+            }
+        } finally {
+            setChargersLoaded(true);
+            setIsLoadingChargers(false);
+        }
+    }, [route?.params?.userName]);
+
+    // Chargers are only fetched the first time the section is opened.
+    const onToggleOrders = () => {
+        if (!ordersExpanded && !chargersLoaded && !isLoadingChargers) {
+            loadChargers();
+        }
+        setOrdersExpanded((prev) => !prev);
+    };
+
+    const loadOrders = async () => {
+        if (!selectedCharger) {
+            Commons.okMsgAlert(i18n.t('chargerRequired'));
+            return;
+        }
+
+        if (!Commons.parseDateTime(fromDateTime) || !Commons.parseDateTime(toDateTime)) {
+            Commons.okMsgAlert(i18n.t('invalidDate'));
+            return;
+        }
+
+        setIsLoadingOrders(true);
+        try {
+            const list = await ServerOperations.getPendingOrders(
+                selectedCharger,
+                connectorFilter.trim(),
+                fromDateTime.trim(),
+                toDateTime.trim()
+            );
+
+            // null means the request failed; [] just means nothing matched.
+            if (list == null) {
+                setOrders([]);
+                setOrdersLoaded(false);
+                Commons.okMsgAlert(i18n.t('ordersLoadFailed'));
+                return;
+            }
+
+            setOrders(list);
+            setOrdersLoaded(true);
+        } finally {
+            setIsLoadingOrders(false);
+        }
+    };
+
+    // Unpaid orders reuse the scan flow: load the charger info for the
+    // order's barcode, then let the user capture the car and print.
+    const onSelectOrder = (order) => {
+        const code = order?.barcode || order?.invNo;
+        if (!order || order.paid || !code) {
+            return;
+        }
+        setBarcode(code);
+        clearResult();
+        checkChargerInfo(code);
+
+        // An order that already carries a car plate pre-fills the car inputs,
+        // so pressing Print sends that plate back with the check.
+        if (order.car) {
+            const [first, second] = splitCarPlate(order.car);
+            setCarPart1(first);
+            setCarPart2(second);
+        }
+
+        scrollRef.current?.scrollTo({ y: 0, animated: true });
     };
 
     // ------------------------------------------------------------------
@@ -401,6 +525,7 @@ export default function MainScreen({ navigation, route }) {
                 </View>
 
                 <ScrollView
+                    ref={scrollRef}
                     style={styles.scroll}
                     contentContainerStyle={styles.scrollContent}
                     keyboardShouldPersistTaps="handled"
@@ -596,6 +721,324 @@ export default function MainScreen({ navigation, route }) {
                         </View>
                     ) : null}
 
+                    {/* Pending orders */}
+                    <View style={styles.card}>
+                        <TouchableOpacity
+                            style={[styles.cardHeader, isArabic && styles.rowReverse]}
+                            onPress={onToggleOrders}
+                            activeOpacity={0.85}
+                        >
+                            <MaterialIcons
+                                name="pending-actions"
+                                size={22}
+                                color={Constants.brandPrimary}
+                            />
+                            <Text
+                                style={[
+                                    styles.cardTitle,
+                                    styles.pendingTitle,
+                                    { textAlign: isArabic ? 'right' : 'left' },
+                                ]}
+                            >
+                                {i18n.t('pendingOrders')}
+                            </Text>
+                            <MaterialIcons
+                                name={ordersExpanded ? 'expand-less' : 'expand-more'}
+                                size={24}
+                                color={Constants.brandMuted}
+                            />
+                        </TouchableOpacity>
+
+                        <Text
+                            style={[styles.cardSubtitle, { textAlign: isArabic ? 'right' : 'left' }]}
+                        >
+                            {i18n.t('pendingOrdersSubtitle')}
+                        </Text>
+
+                        {ordersExpanded ? (
+                            <View>
+                                {/* Charger (required) */}
+                                <Text
+                                    style={[
+                                        styles.fieldLabel,
+                                        { textAlign: isArabic ? 'right' : 'left' },
+                                    ]}
+                                >
+                                    {i18n.t('chargerLabel')}
+                                </Text>
+                                <TouchableOpacity
+                                    style={[styles.selectField, isArabic && styles.rowReverse]}
+                                    onPress={() => setChargerPickerVisible(true)}
+                                    activeOpacity={0.85}
+                                >
+                                    {isLoadingChargers ? (
+                                        <ActivityIndicator
+                                            size="small"
+                                            color={Constants.brandPrimary}
+                                        />
+                                    ) : (
+                                        <Text
+                                            style={[
+                                                styles.selectValue,
+                                                !selectedCharger && styles.selectPlaceholder,
+                                                { textAlign: isArabic ? 'right' : 'left' },
+                                            ]}
+                                            numberOfLines={1}
+                                        >
+                                            {selectedCharger || i18n.t('chargerPlaceholder')}
+                                        </Text>
+                                    )}
+                                    <MaterialIcons
+                                        name="arrow-drop-down"
+                                        size={24}
+                                        color={Constants.brandMuted}
+                                    />
+                                </TouchableOpacity>
+
+                                {/* Connector (optional) */}
+                                <Text
+                                    style={[
+                                        styles.fieldLabel,
+                                        { textAlign: isArabic ? 'right' : 'left' },
+                                    ]}
+                                >
+                                    {i18n.t('connectorLabel')}
+                                </Text>
+                                <TextInput
+                                    style={[
+                                        styles.filterInput,
+                                        { textAlign: isArabic ? 'right' : 'left' },
+                                    ]}
+                                    placeholder={i18n.t('connectorPlaceholder')}
+                                    placeholderTextColor={Constants.brandMuted}
+                                    value={connectorFilter}
+                                    onChangeText={setConnectorFilter}
+                                    autoCorrect={false}
+                                />
+
+                                {/* From date & time */}
+                                <Text
+                                    style={[
+                                        styles.fieldLabel,
+                                        styles.fieldLabelSpaced,
+                                        { textAlign: isArabic ? 'right' : 'left' },
+                                    ]}
+                                >
+                                    {i18n.t('fromDateLabel')}
+                                </Text>
+                                <TouchableOpacity
+                                    style={[styles.dateField, isArabic && styles.rowReverse]}
+                                    onPress={() => setDatePickerTarget('from')}
+                                    activeOpacity={0.85}
+                                >
+                                    <Text
+                                        style={[
+                                            styles.dateValue,
+                                            { textAlign: isArabic ? 'right' : 'left' },
+                                        ]}
+                                        numberOfLines={1}
+                                    >
+                                        {fromDateTime}
+                                    </Text>
+                                    <MaterialIcons
+                                        name="calendar-today"
+                                        size={18}
+                                        color={Constants.brandMuted}
+                                    />
+                                </TouchableOpacity>
+
+                                {/* To date & time */}
+                                <Text
+                                    style={[
+                                        styles.fieldLabel,
+                                        styles.fieldLabelSpaced,
+                                        { textAlign: isArabic ? 'right' : 'left' },
+                                    ]}
+                                >
+                                    {i18n.t('toDateLabel')}
+                                </Text>
+                                <TouchableOpacity
+                                    style={[styles.dateField, isArabic && styles.rowReverse]}
+                                    onPress={() => setDatePickerTarget('to')}
+                                    activeOpacity={0.85}
+                                >
+                                    <Text
+                                        style={[
+                                            styles.dateValue,
+                                            { textAlign: isArabic ? 'right' : 'left' },
+                                        ]}
+                                        numberOfLines={1}
+                                    >
+                                        {toDateTime}
+                                    </Text>
+                                    <MaterialIcons
+                                        name="calendar-today"
+                                        size={18}
+                                        color={Constants.brandMuted}
+                                    />
+                                </TouchableOpacity>
+
+                                <TouchableOpacity
+                                    style={[
+                                        styles.checkButton,
+                                        isArabic && styles.rowReverse,
+                                        isLoadingOrders && styles.buttonDisabled,
+                                    ]}
+                                    onPress={loadOrders}
+                                    disabled={isLoadingOrders}
+                                    activeOpacity={0.85}
+                                >
+                                    {isLoadingOrders ? (
+                                        <ActivityIndicator size="small" color="#FFFFFF" />
+                                    ) : (
+                                        <>
+                                            <MaterialIcons name="search" size={20} color="#FFFFFF" />
+                                            <Text style={styles.checkButtonText}>
+                                                {i18n.t('showOrders')}
+                                            </Text>
+                                        </>
+                                    )}
+                                </TouchableOpacity>
+
+                                {/* Orders list */}
+                                {orders.length > 0 ? (
+                                    <View style={styles.ordersList}>
+                                        {orders.map((order, index) => {
+                                            const canTap = !order.paid && !!(order.barcode || order.invNo);
+                                            const meta = [
+                                                order.charger,
+                                                order.connector
+                                                    ? `${i18n.t('connectorLabel')} ${order.connector}`
+                                                    : '',
+                                                order.invNo || order.barcode,
+                                            ]
+                                                .filter(Boolean)
+                                                .join(' · ');
+
+                                            return (
+                                                <TouchableOpacity
+                                                    key={`${order.invNo}-${order.datetime}-${index}`}
+                                                    style={[
+                                                        styles.orderRow,
+                                                        index === orders.length - 1 &&
+                                                            styles.orderRowLast,
+                                                    ]}
+                                                    activeOpacity={canTap ? 0.7 : 1}
+                                                    disabled={!canTap}
+                                                    onPress={() => onSelectOrder(order)}
+                                                >
+                                                    <View
+                                                        style={[
+                                                            styles.orderTop,
+                                                            isArabic && styles.rowReverse,
+                                                        ]}
+                                                    >
+                                                        <Text style={styles.orderDate}>
+                                                            {order.datetime || '-'}
+                                                        </Text>
+                                                        <View
+                                                            style={[
+                                                                styles.badge,
+                                                                order.paid
+                                                                    ? styles.badgePaid
+                                                                    : styles.badgeUnpaid,
+                                                            ]}
+                                                        >
+                                                            <Text
+                                                                style={[
+                                                                    styles.badgeText,
+                                                                    order.paid
+                                                                        ? styles.badgeTextPaid
+                                                                        : styles.badgeTextUnpaid,
+                                                                ]}
+                                                            >
+                                                                {order.paid
+                                                                    ? i18n.t('paid')
+                                                                    : i18n.t('unpaid')}
+                                                            </Text>
+                                                        </View>
+                                                    </View>
+
+                                                    <Text
+                                                        style={[
+                                                            styles.orderMeta,
+                                                            { textAlign: isArabic ? 'right' : 'left' },
+                                                        ]}
+                                                    >
+                                                        {meta || '-'}
+                                                    </Text>
+
+                                                    {order.user || order.car ? (
+                                                        <View
+                                                            style={[
+                                                                styles.orderDetailRow,
+                                                                isArabic && styles.rowReverse,
+                                                            ]}
+                                                        >
+                                                            {order.user ? (
+                                                                <View style={styles.orderDetail}>
+                                                                    <MaterialIcons
+                                                                        name="person-outline"
+                                                                        size={14}
+                                                                        color={Constants.brandMuted}
+                                                                    />
+                                                                    <Text style={styles.orderDetailText}>
+                                                                        {order.user}
+                                                                    </Text>
+                                                                </View>
+                                                            ) : null}
+                                                            {order.car ? (
+                                                                <View style={styles.orderDetail}>
+                                                                    <MaterialIcons
+                                                                        name="directions-car"
+                                                                        size={14}
+                                                                        color={Constants.brandMuted}
+                                                                    />
+                                                                    <Text style={styles.orderDetailText}>
+                                                                        {order.car}
+                                                                    </Text>
+                                                                </View>
+                                                            ) : null}
+                                                        </View>
+                                                    ) : null}
+
+                                                    {canTap ? (
+                                                        <View
+                                                            style={[
+                                                                styles.orderTapHint,
+                                                                isArabic && styles.rowReverse,
+                                                            ]}
+                                                        >
+                                                            <MaterialIcons
+                                                                name="print"
+                                                                size={14}
+                                                                color={Constants.brandPrimary}
+                                                            />
+                                                            <Text style={styles.orderTapHintText}>
+                                                                {i18n.t('tapToPrint')}
+                                                            </Text>
+                                                        </View>
+                                                    ) : null}
+                                                </TouchableOpacity>
+                                            );
+                                        })}
+                                    </View>
+                                ) : ordersLoaded ? (
+                                    <View style={styles.ordersEmpty}>
+                                        <MaterialIcons
+                                            name="inbox"
+                                            size={34}
+                                            color={Constants.brandMuted}
+                                        />
+                                        <Text style={styles.ordersEmptyText}>
+                                            {i18n.t('noOrdersFound')}
+                                        </Text>
+                                    </View>
+                                ) : null}
+                            </View>
+                        ) : null}
+                    </View>
+
                     {/* Footer */}
                     <View style={[styles.footer, isArabic && styles.rowReverse]}>
                         <TouchableOpacity style={styles.footerButton} onPress={onLogout}>
@@ -619,6 +1062,33 @@ export default function MainScreen({ navigation, route }) {
                     visible={scannerVisible}
                     onScanned={onBarcodeScanned}
                     onClose={() => setScannerVisible(false)}
+                />
+
+                <OptionPickerModal
+                    visible={chargerPickerVisible}
+                    title={i18n.t('selectCharger')}
+                    options={chargers}
+                    selectedValue={selectedCharger}
+                    onSelect={setSelectedCharger}
+                    onClose={() => setChargerPickerVisible(false)}
+                    loading={isLoadingChargers}
+                    emptyText={i18n.t('noChargersFound')}
+                />
+
+                <DatePickerModal
+                    visible={datePickerTarget != null}
+                    title={
+                        datePickerTarget === 'to' ? i18n.t('toDateLabel') : i18n.t('fromDateLabel')
+                    }
+                    value={datePickerTarget === 'to' ? toDateTime : fromDateTime}
+                    onSelect={(value) => {
+                        if (datePickerTarget === 'to') {
+                            setToDateTime(value);
+                        } else {
+                            setFromDateTime(value);
+                        }
+                    }}
+                    onClose={() => setDatePickerTarget(null)}
                 />
 
                 <ProgressDialog visible={isChecking} title={i18n.t('checking')} />
@@ -947,6 +1417,160 @@ const styles = StyleSheet.create({
         fontSize: 16,
         fontWeight: '700',
         marginHorizontal: 8,
+    },
+
+    // Pending orders -------------------------------------------------------
+    pendingTitle: {
+        flex: 1,
+    },
+    fieldLabel: {
+        fontSize: 12.5,
+        color: Constants.brandMuted,
+        marginBottom: 6,
+    },
+    selectField: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        height: 52,
+        borderWidth: 1,
+        borderColor: Constants.brandBorder,
+        backgroundColor: '#F7FAFA',
+        borderRadius: 14,
+        paddingHorizontal: 14,
+    },
+    selectValue: {
+        flex: 1,
+        fontSize: 16,
+        color: Constants.brandText,
+    },
+    selectPlaceholder: {
+        color: Constants.brandMuted,
+    },
+    fieldLabelSpaced: {
+        marginTop: 14,
+    },
+    filterInput: {
+        minWidth: 0,
+        height: 50,
+        borderWidth: 1,
+        borderColor: Constants.brandBorder,
+        backgroundColor: '#F7FAFA',
+        borderRadius: 14,
+        paddingHorizontal: 14,
+        fontSize: 15,
+        color: Constants.brandText,
+    },
+    dateField: {
+        minWidth: 0,
+        height: 50,
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        borderWidth: 1,
+        borderColor: Constants.brandBorder,
+        backgroundColor: '#F7FAFA',
+        borderRadius: 14,
+        paddingHorizontal: 14,
+    },
+    dateValue: {
+        flex: 1,
+        minWidth: 0,
+        fontSize: 15,
+        color: Constants.brandText,
+        marginRight: 8,
+    },
+    ordersList: {
+        marginTop: 16,
+        borderWidth: 1,
+        borderColor: Constants.brandBorder,
+        borderRadius: 14,
+        paddingHorizontal: 14,
+    },
+    orderRow: {
+        paddingVertical: 14,
+        borderBottomWidth: 1,
+        borderBottomColor: '#EDF3F3',
+    },
+    orderRowLast: {
+        borderBottomWidth: 0,
+    },
+    orderTop: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+    },
+    orderDate: {
+        fontSize: 14,
+        fontWeight: '800',
+        color: Constants.brandText,
+    },
+    badge: {
+        borderRadius: 20,
+        paddingHorizontal: 10,
+        paddingVertical: 3,
+        marginHorizontal: 6,
+    },
+    badgePaid: {
+        backgroundColor: '#E4F4EA',
+    },
+    badgeUnpaid: {
+        backgroundColor: '#FDECEC',
+    },
+    badgeText: {
+        fontSize: 11,
+        fontWeight: '800',
+    },
+    badgeTextPaid: {
+        color: Constants.brandSuccess,
+    },
+    badgeTextUnpaid: {
+        color: Constants.brandDanger,
+    },
+    orderMeta: {
+        fontSize: 12.5,
+        color: Constants.brandMuted,
+        marginTop: 6,
+    },
+    orderDetailRow: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        marginTop: 8,
+    },
+    orderDetail: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        marginHorizontal: 8,
+    },
+    orderDetailText: {
+        fontSize: 12.5,
+        color: Constants.brandText,
+        marginHorizontal: 4,
+    },
+    orderTapHint: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        marginTop: 10,
+    },
+    orderTapHintText: {
+        fontSize: 12,
+        fontWeight: '800',
+        color: Constants.brandPrimary,
+        marginHorizontal: 6,
+    },
+    ordersEmpty: {
+        alignItems: 'center',
+        paddingVertical: 22,
+        marginTop: 16,
+        borderWidth: 1,
+        borderColor: Constants.brandBorder,
+        borderRadius: 14,
+    },
+    ordersEmptyText: {
+        fontSize: 13,
+        color: Constants.brandMuted,
+        marginTop: 8,
+        textAlign: 'center',
     },
 
     // Footer ---------------------------------------------------------------

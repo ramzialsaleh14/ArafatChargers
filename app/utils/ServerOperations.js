@@ -235,3 +235,227 @@ export const setChargerCar = async (user, barcode, car) => {
     return { ERROR: true, error: error.message };
   }
 };
+
+// ---------------------------------------------------------------------------
+// List payload helpers
+// ---------------------------------------------------------------------------
+// The gateway wraps list results in different envelopes (or returns a bare
+// array); flatten all of them to a plain array.
+const listOf = (payload) => {
+  if (Array.isArray(payload)) {
+    return payload;
+  }
+  if (payload && typeof payload === "object") {
+    const keys = ["CHARGERS", "ORDERS", "DATA", "RESULT", "RESULTS", "LIST", "ROWS", "ITEMS"];
+    for (const key of keys) {
+      if (Array.isArray(payload[key])) {
+        return payload[key];
+      }
+    }
+  }
+  return [];
+};
+
+// Reads the first non-empty value among `keys` (case-insensitive).
+const pickValue = (source, keys) => {
+  if (!source || typeof source !== "object") {
+    return undefined;
+  }
+  for (const key of keys) {
+    const value = source[key];
+    if (value !== undefined && value !== null && value !== "") {
+      return value;
+    }
+  }
+  const lookup = {};
+  Object.keys(source).forEach((key) => {
+    lookup[key.toUpperCase()] = key;
+  });
+  for (const key of keys) {
+    const realKey = lookup[key.toUpperCase()];
+    if (realKey) {
+      const value = source[realKey];
+      if (value !== undefined && value !== null && value !== "") {
+        return value;
+      }
+    }
+  }
+  return undefined;
+};
+
+// Normalises scalars and small { ID, NAME } objects into a trimmed string.
+const textOf = (value) => {
+  if (value === undefined || value === null) {
+    return "";
+  }
+  if (typeof value === "object") {
+    const inner = pickValue(value, ["ID", "NAME", "VALUE", "CODE", "NO", "NUMBER"]);
+    return inner !== undefined && inner !== null ? String(inner).trim() : "";
+  }
+  return String(value).trim();
+};
+
+// The various truthy flavours a boolean flag can arrive in.
+const flagOf = (value) =>
+  value === true ||
+  value === "true" ||
+  value === "Y" ||
+  value === "y" ||
+  value === 1 ||
+  value === "1" ||
+  value === "PAID";
+
+// A charger can be a bare id or a small object.
+const normalizeCharger = (raw) => {
+  if (raw === undefined || raw === null) {
+    return "";
+  }
+  if (typeof raw === "object" && !Array.isArray(raw)) {
+    return textOf(
+      pickValue(raw, [
+        "CHARGER",
+        "CHARGER_ID",
+        "CHARGERID",
+        "CHARGER_NO",
+        "METER",
+        "ID",
+        "NAME",
+        "VALUE",
+        "CODE",
+        "NO",
+      ])
+    );
+  }
+  return String(raw).trim();
+};
+
+// The invoice-number flavours the service may use.
+const INVNO_FIELDS = ["INVNO", "INV_NO", "INV.NO", "INVOICE", "INVOICE_NO", "INVOICE_NUMBER"];
+
+// Field-name flavours the orders service may use.
+const ORDER_FIELDS = {
+  datetime: ["DATETIME", "DATE_TIME", "DATE TIME", "ORDER_DATE", "TRANS_DATE", "DATE", "TIME"],
+  charger: ["CHARGER", "CHARGER_ID", "CHARGERID", "CHARGER_NO", "METER"],
+  connector: ["CONNECTOR", "CONNECTOR_ID", "CONNECTORID", "CONNECTOR_NO", "PORT"],
+  user: ["USER", "USERNAME", "USER_NAME", "USERID", "USER_ID"],
+  car: ["CAR", "CAR_NO", "CARNO", "CAR_NUMBER", "PLATE", "PLATE_NO"],
+  invNo: [...INVNO_FIELDS, "QRCODE", "CODE"],
+  // The code handed to the check / print flow (BARCODE when the order has one).
+  barcode: ["BARCODE", "BAR_CODE", ...INVNO_FIELDS, "QRCODE", "CODE"],
+  paid: ["PAID", "IS_PAID", "ISPAID", "PAYED", "PAID_FLAG"],
+};
+
+// Maps any of the field-name flavours the service may use to one shape.
+const normalizeOrder = (raw) => {
+  if (raw === undefined || raw === null) {
+    return null;
+  }
+  const source = typeof raw === "object" && !Array.isArray(raw) ? raw : { VALUE: raw };
+  return {
+    datetime: textOf(pickValue(source, ORDER_FIELDS.datetime)),
+    charger: textOf(pickValue(source, ORDER_FIELDS.charger)),
+    connector: textOf(pickValue(source, ORDER_FIELDS.connector)),
+    user: textOf(pickValue(source, ORDER_FIELDS.user)),
+    car: textOf(pickValue(source, ORDER_FIELDS.car)),
+    invNo: textOf(pickValue(source, ORDER_FIELDS.invNo)),
+    barcode: textOf(pickValue(source, ORDER_FIELDS.barcode)),
+    paid: flagOf(pickValue(source, ORDER_FIELDS.paid)),
+  };
+};
+
+/**
+ * Returns the list of charger ids available to the logged in user.
+ *
+ * Resolves to an array of strings (empty when nothing is available or the
+ * request fails) so callers can render a picker without extra checks.
+ */
+export const getChargers = async (user) => {
+  try {
+    /* Request params */
+    let params = "";
+    params += `action=${Constants.GET_CHARGERS}`;
+    params += `&USER=${encodeURIComponent(user ?? "")}`;
+
+    console.log("Chargers request params:", params);
+
+    /* Send request */
+    const response = await pickHttpRequest(params);
+
+    /* Check response */
+    if (response === Constants.networkError_code) {
+      console.error("Network error while getting chargers");
+      return [];
+    }
+
+    if (response && response.ok) {
+      try {
+        const jsonResult = await response.json();
+        console.log("Chargers JSON result:", jsonResult);
+        const ids = listOf(jsonResult).map(normalizeCharger).filter(Boolean);
+        return Array.from(new Set(ids));
+      } catch (jsonError) {
+        console.error("Failed to parse JSON response:", jsonError);
+        return [];
+      }
+    }
+
+    console.error("Get chargers failed - response not ok:", response);
+    return [];
+  } catch (error) {
+    console.error("Get chargers request failed:", error);
+    return [];
+  }
+};
+
+/**
+ * Returns the pending orders for a charger between two dd/MM/yyyy dates.
+ *
+ * `charger` is required, `connector` is optional (pass an empty string for
+ * "all connectors"). Each order is normalised to:
+ *   { datetime, charger, connector, user, car, invNo, barcode, paid }
+ *
+ * Resolves to an array (possibly empty) on success, or null when the request
+ * fails, so the caller can tell "nothing found" from "could not load".
+ */
+export const getPendingOrders = async (charger, connector, fromDate, toDate) => {
+  try {
+    // The logged in user is resolved here so callers don't have to pass it.
+    const user = await Commons.getFromAS("userID");
+
+    /* Request params */
+    let params = "";
+    params += `action=${Constants.GET_PENDING_ORDERS}`;
+    params += `&CHARGER=${encodeURIComponent(charger ?? "")}`;
+    params += `&CONNECTOR=${encodeURIComponent(connector ?? "")}`;
+    params += `&FROM_DATE=${encodeURIComponent(fromDate ?? "")}`;
+    params += `&TO_DATE=${encodeURIComponent(toDate ?? "")}`;
+
+    console.log("Pending orders request params:", params);
+
+    /* Send request */
+    const response = await pickHttpRequest(params);
+
+    /* Check response */
+    if (response === Constants.networkError_code) {
+      console.error("Network error while getting pending orders");
+      return null;
+    }
+
+    if (response && response.ok) {
+      try {
+        const jsonResult = await response.json();
+        console.log("Pending orders JSON result:", jsonResult);
+        return listOf(jsonResult).map(normalizeOrder).filter(Boolean);
+      } catch (jsonError) {
+        console.error("Failed to parse JSON response:", jsonError);
+        return null;
+      }
+    }
+
+    console.error("Get pending orders failed - response not ok:", response);
+    return null;
+  } catch (error) {
+    console.error("Get pending orders request failed:", error);
+    return null;
+  }
+};

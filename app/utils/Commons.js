@@ -64,6 +64,41 @@ export const direction = () => (isArabic() ? "row-reverse" : "row");
 export const textAlign = () => (isArabic() ? "right" : "left");
 
 // ---------------------------------------------------------------------------
+// Dates
+// ---------------------------------------------------------------------------
+const pad2 = (value) => String(value).padStart(2, "0");
+
+// Formats a Date as yyyy-MM-dd HH:mm:ss (the format the service expects).
+export const formatDateTime = (date) =>
+  `${date.getFullYear()}-${pad2(date.getMonth() + 1)}-${pad2(date.getDate())} ` +
+  `${pad2(date.getHours())}:${pad2(date.getMinutes())}:${pad2(date.getSeconds())}`;
+
+// Parses yyyy-MM-dd HH:mm:ss (seconds optional, 'T' separator accepted).
+export const parseDateTime = (value) => {
+  const match = /^(\d{4})-(\d{1,2})-(\d{1,2})[ T](\d{1,2}):(\d{1,2})(?::(\d{1,2}))?$/.exec(
+    String(value || "").trim()
+  );
+  if (!match) {
+    return null;
+  }
+  const year = Number(match[1]);
+  const month = Number(match[2]);
+  const day = Number(match[3]);
+  const hour = Number(match[4]);
+  const minute = Number(match[5]);
+  const second = Number(match[6] || 0);
+  const date = new Date(year, month - 1, day, hour, minute, second);
+  const valid =
+    date.getFullYear() === year &&
+    date.getMonth() === month - 1 &&
+    date.getDate() === day &&
+    date.getHours() === hour &&
+    date.getMinutes() === minute &&
+    date.getSeconds() === second;
+  return valid ? date : null;
+};
+
+// ---------------------------------------------------------------------------
 // Alerts
 // ---------------------------------------------------------------------------
 export const okAlert = (title, msg, cancelable = true, fnToPerform = null) => {
