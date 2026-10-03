@@ -68,6 +68,14 @@ export const textAlign = () => (isArabic() ? "right" : "left");
 // ---------------------------------------------------------------------------
 const pad2 = (value) => String(value).padStart(2, "0");
 
+// Returns a new Date at 00:00:00 of the given day (defaults to today).
+export const startOfDay = (date = new Date()) =>
+  new Date(date.getFullYear(), date.getMonth(), date.getDate(), 0, 0, 0);
+
+// Returns a new Date at 23:59:59 of the given day (defaults to today).
+export const endOfDay = (date = new Date()) =>
+  new Date(date.getFullYear(), date.getMonth(), date.getDate(), 23, 59, 59);
+
 // Formats a Date as yyyy-MM-dd HH:mm:ss (the format the service expects).
 export const formatDateTime = (date) =>
   `${date.getFullYear()}-${pad2(date.getMonth() + 1)}-${pad2(date.getDate())} ` +

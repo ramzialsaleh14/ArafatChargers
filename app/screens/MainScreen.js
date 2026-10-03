@@ -82,9 +82,13 @@ export default function MainScreen({ navigation, route }) {
     const [chargerPickerVisible, setChargerPickerVisible] = useState(false);
     const [selectedCharger, setSelectedCharger] = useState('');
     const [connectorFilter, setConnectorFilter] = useState('');
-    // Defaults are the current date and time in yyyy-MM-dd HH:mm:ss.
-    const [fromDateTime, setFromDateTime] = useState(() => Commons.formatDateTime(new Date()));
-    const [toDateTime, setToDateTime] = useState(() => Commons.formatDateTime(new Date()));
+    // Default range covers the whole current day (00:00:00 to 23:59:59).
+    const [fromDateTime, setFromDateTime] = useState(() =>
+        Commons.formatDateTime(Commons.startOfDay())
+    );
+    const [toDateTime, setToDateTime] = useState(() =>
+        Commons.formatDateTime(Commons.endOfDay())
+    );
     // Which date field the calendar sheet is editing: 'from' | 'to' | null.
     const [datePickerTarget, setDatePickerTarget] = useState(null);
     const [orders, setOrders] = useState([]);
@@ -1081,6 +1085,7 @@ export default function MainScreen({ navigation, route }) {
                         datePickerTarget === 'to' ? i18n.t('toDateLabel') : i18n.t('fromDateLabel')
                     }
                     value={datePickerTarget === 'to' ? toDateTime : fromDateTime}
+                    defaultTime={datePickerTarget === 'to' ? 'end' : 'start'}
                     onSelect={(value) => {
                         if (datePickerTarget === 'to') {
                             setToDateTime(value);

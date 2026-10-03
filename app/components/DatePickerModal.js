@@ -15,6 +15,12 @@ import i18n from "../languages/langStrings";
 
 const pad2 = (value) => String(value).padStart(2, "0");
 
+// Time presets used when a day is picked: 'start' = 00:00:00, 'end' = 23:59:59.
+const TIME_PRESETS = {
+  start: [0, 0, 0],
+  end: [23, 59, 59],
+};
+
 // Month / weekday names are hard-coded so the picker never depends on Intl
 // being available in the runtime.
 const MONTHS = {
@@ -44,12 +50,15 @@ const sameDay = (a, b) =>
 /**
  * Month-grid date picker rendered as a centred sheet.
  *
- * `value` is a dd/MM/yyyy string; `onSelect` receives a dd/MM/yyyy string.
+ * `value` is a yyyy-MM-dd HH:mm:ss string; `onSelect` receives the same format.
+ * `defaultTime` ('start' | 'end') sets the time applied when a day is picked,
+ * so a "from" day defaults to 00:00:00 and a "to" day to 23:59:59.
  */
 export default function DatePickerModal({
   visible = false,
   title = "",
   value = "",
+  defaultTime,
   onSelect = () => {},
   onClose = () => {},
 }) {
@@ -143,6 +152,17 @@ export default function DatePickerModal({
     setSecond(pad2(now.getSeconds()));
   };
 
+  // Picking a day also resets the time to this field's default boundary.
+  const onSelectDay = (day) => {
+    setSelectedDay(day);
+    const preset = TIME_PRESETS[defaultTime];
+    if (preset) {
+      setHour(pad2(preset[0]));
+      setMinute(pad2(preset[1]));
+      setSecond(pad2(preset[2]));
+    }
+  };
+
   // Keeps at most two digits in the HH / MM / SS fields.
   const onTimeChange = (setter) => (text) =>
     setter(String(text).replace(/\D/g, "").slice(0, 2));
@@ -216,7 +236,7 @@ export default function DatePickerModal({
                       isSelected && styles.dayCellSelected,
                     ]}
                     activeOpacity={0.8}
-                    onPress={() => setSelectedDay(day)}
+                    onPress={() => onSelectDay(day)}
                   >
                     <Text
                       style={[
