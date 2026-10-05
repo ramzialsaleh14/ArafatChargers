@@ -406,7 +406,9 @@ export default function MainScreen({ navigation, route }) {
                 selectedCharger,
                 connectorFilter.trim(),
                 fromDateTime.trim(),
-                toDateTime.trim()
+                toDateTime.trim(),
+                // Pending orders are not scoped to the current user.
+                ''
             );
 
             // null means the request failed; [] just means nothing matched.

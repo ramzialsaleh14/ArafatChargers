@@ -411,8 +411,9 @@ export const getChargers = async (user) => {
  * Returns the pending orders for a charger between two dd/MM/yyyy dates.
  *
  * `charger` is required, `connector` is optional (pass an empty string for
- * "all connectors"). `user` is optional: when it is passed the service also
- * filters by that user. Each order is normalised to:
+ * "all connectors"). `user` is optional and is sent as an empty string when
+ * not given; today's orders pass it so the service filters by that user. Each
+ * order is normalised to:
  *   { datetime, charger, connector, user, car, invNo, barcode, paid }
  *
  * Resolves to an array (possibly empty) on success, or null when the request
@@ -427,11 +428,9 @@ export const getPendingOrders = async (charger, connector, fromDate, toDate, use
     params += `&CONNECTOR=${encodeURIComponent(connector ?? "")}`;
     params += `&FROM_DATE=${encodeURIComponent(fromDate ?? "")}`;
     params += `&TO_DATE=${encodeURIComponent(toDate ?? "")}`;
-    // Sent only by today's orders, which has no charger filter: the service
-    // then returns that user's orders across every charger.
-    if (user) {
-      params += `&USER=${encodeURIComponent(user)}`;
-    }
+    // Empty for pending orders; today's orders fill it with the current user
+    // so the service returns that user's orders across every charger.
+    params += `&USER=${encodeURIComponent(user ?? "")}`;
 
     console.log("Pending orders request params:", params);
 
