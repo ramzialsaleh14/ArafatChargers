@@ -89,6 +89,10 @@ export default {
   unpaid: "غير مدفوع",
   tapToPrint: "اضغط للطباعة",
 
+  // Today's orders
+  todayOrders: "طلبات اليوم",
+  todayOrdersSubtitle: "عرض كل طلبات اليوم للمستخدم الحالي (بدون اختيار الشاحن أو التاريخ).",
+
   // Language
   languageLabel: "English",
 

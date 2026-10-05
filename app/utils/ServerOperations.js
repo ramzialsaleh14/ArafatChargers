@@ -411,17 +411,15 @@ export const getChargers = async (user) => {
  * Returns the pending orders for a charger between two dd/MM/yyyy dates.
  *
  * `charger` is required, `connector` is optional (pass an empty string for
- * "all connectors"). Each order is normalised to:
+ * "all connectors"). `user` is optional: when it is passed the service also
+ * filters by that user. Each order is normalised to:
  *   { datetime, charger, connector, user, car, invNo, barcode, paid }
  *
  * Resolves to an array (possibly empty) on success, or null when the request
  * fails, so the caller can tell "nothing found" from "could not load".
  */
-export const getPendingOrders = async (charger, connector, fromDate, toDate) => {
+export const getPendingOrders = async (charger, connector, fromDate, toDate, user) => {
   try {
-    // The logged in user is resolved here so callers don't have to pass it.
-    const user = await Commons.getFromAS("userID");
-
     /* Request params */
     let params = "";
     params += `action=${Constants.GET_PENDING_ORDERS}`;
@@ -429,6 +427,11 @@ export const getPendingOrders = async (charger, connector, fromDate, toDate) => 
     params += `&CONNECTOR=${encodeURIComponent(connector ?? "")}`;
     params += `&FROM_DATE=${encodeURIComponent(fromDate ?? "")}`;
     params += `&TO_DATE=${encodeURIComponent(toDate ?? "")}`;
+    // Sent only by today's orders, which has no charger filter: the service
+    // then returns that user's orders across every charger.
+    if (user) {
+      params += `&USER=${encodeURIComponent(user)}`;
+    }
 
     console.log("Pending orders request params:", params);
 
@@ -458,4 +461,23 @@ export const getPendingOrders = async (charger, connector, fromDate, toDate) => 
     console.error("Get pending orders request failed:", error);
     return null;
   }
+};
+
+/**
+ * Returns the logged in user's orders for the current day, across every
+ * charger.
+ *
+ * Reuses the pending orders service with an empty charger filter and the
+ * current day (00:00:00 to 23:59:59) as the date range, and adds the logged
+ * in user to the request.
+ *
+ * Resolves to an array (possibly empty) on success, or null when the request
+ * fails.
+ */
+export const getTodayOrders = async (user) => {
+  const currentUser = user || (await Commons.getFromAS("userID")) || "";
+  const fromDate = Commons.formatDateTime(Commons.startOfDay());
+  const toDate = Commons.formatDateTime(Commons.endOfDay());
+
+  return getPendingOrders("", "", fromDate, toDate, currentUser);
 };

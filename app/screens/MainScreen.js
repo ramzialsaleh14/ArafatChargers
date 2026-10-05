@@ -53,6 +53,106 @@ const splitCarPlate = (value) => {
     return [text, ''];
 };
 
+// Order cards shared by the pending orders and today's orders lists.
+// Shows the "no orders" state once a load has completed without results.
+function OrdersList({ orders, loaded, isArabic, onSelectOrder }) {
+    if (orders.length === 0) {
+        return loaded ? (
+            <View style={styles.ordersEmpty}>
+                <MaterialIcons name="inbox" size={34} color={Constants.brandMuted} />
+                <Text style={styles.ordersEmptyText}>{i18n.t('noOrdersFound')}</Text>
+            </View>
+        ) : null;
+    }
+
+    return (
+        <View style={styles.ordersList}>
+            {orders.map((order, index) => {
+                const canTap = !order.paid && !!(order.barcode || order.invNo);
+                const meta = [
+                    order.charger,
+                    order.connector ? `${i18n.t('connectorLabel')} ${order.connector}` : '',
+                    order.invNo || order.barcode,
+                ]
+                    .filter(Boolean)
+                    .join(' · ');
+
+                return (
+                    <TouchableOpacity
+                        key={`${order.invNo}-${order.datetime}-${index}`}
+                        style={[
+                            styles.orderRow,
+                            index === orders.length - 1 && styles.orderRowLast,
+                        ]}
+                        activeOpacity={canTap ? 0.7 : 1}
+                        disabled={!canTap}
+                        onPress={() => onSelectOrder(order)}
+                    >
+                        <View style={[styles.orderTop, isArabic && styles.rowReverse]}>
+                            <Text style={styles.orderDate}>{order.datetime || '-'}</Text>
+                            <View
+                                style={[
+                                    styles.badge,
+                                    order.paid ? styles.badgePaid : styles.badgeUnpaid,
+                                ]}
+                            >
+                                <Text
+                                    style={[
+                                        styles.badgeText,
+                                        order.paid ? styles.badgeTextPaid : styles.badgeTextUnpaid,
+                                    ]}
+                                >
+                                    {order.paid ? i18n.t('paid') : i18n.t('unpaid')}
+                                </Text>
+                            </View>
+                        </View>
+
+                        <Text style={[styles.orderMeta, { textAlign: isArabic ? 'right' : 'left' }]}>
+                            {meta || '-'}
+                        </Text>
+
+                        {order.user || order.car ? (
+                            <View style={[styles.orderDetailRow, isArabic && styles.rowReverse]}>
+                                {order.user ? (
+                                    <View style={styles.orderDetail}>
+                                        <MaterialIcons
+                                            name="person-outline"
+                                            size={14}
+                                            color={Constants.brandMuted}
+                                        />
+                                        <Text style={styles.orderDetailText}>{order.user}</Text>
+                                    </View>
+                                ) : null}
+                                {order.car ? (
+                                    <View style={styles.orderDetail}>
+                                        <MaterialIcons
+                                            name="directions-car"
+                                            size={14}
+                                            color={Constants.brandMuted}
+                                        />
+                                        <Text style={styles.orderDetailText}>{order.car}</Text>
+                                    </View>
+                                ) : null}
+                            </View>
+                        ) : null}
+
+                        {canTap ? (
+                            <View style={[styles.orderTapHint, isArabic && styles.rowReverse]}>
+                                <MaterialIcons
+                                    name="print"
+                                    size={14}
+                                    color={Constants.brandPrimary}
+                                />
+                                <Text style={styles.orderTapHintText}>{i18n.t('tapToPrint')}</Text>
+                            </View>
+                        ) : null}
+                    </TouchableOpacity>
+                );
+            })}
+        </View>
+    );
+}
+
 export default function MainScreen({ navigation, route }) {
     const [lang, setLang] = useState(i18n.locale || 'en');
     const [username, setUsername] = useState(route?.params?.userName || '');
@@ -94,6 +194,13 @@ export default function MainScreen({ navigation, route }) {
     const [orders, setOrders] = useState([]);
     const [ordersLoaded, setOrdersLoaded] = useState(false);
     const [isLoadingOrders, setIsLoadingOrders] = useState(false);
+
+    // Today's orders: the current user's orders for the current day, so no
+    // charger or date inputs are needed.
+    const [todayExpanded, setTodayExpanded] = useState(false);
+    const [todayOrders, setTodayOrders] = useState([]);
+    const [todayOrdersLoaded, setTodayOrdersLoaded] = useState(false);
+    const [isLoadingTodayOrders, setIsLoadingTodayOrders] = useState(false);
 
     const isArabic = lang.startsWith('ar');
     const hasBarcode = barcode.trim().length > 0;
@@ -314,6 +421,28 @@ export default function MainScreen({ navigation, route }) {
             setOrdersLoaded(true);
         } finally {
             setIsLoadingOrders(false);
+        }
+    };
+
+    // Uses the pending orders service with no charger filter and the current
+    // day as the date range; the service scopes the list to the current user.
+    const loadTodayOrders = async () => {
+        setIsLoadingTodayOrders(true);
+        try {
+            const list = await ServerOperations.getTodayOrders();
+
+            // null means the request failed; [] just means nothing matched.
+            if (list == null) {
+                setTodayOrders([]);
+                setTodayOrdersLoaded(false);
+                Commons.okMsgAlert(i18n.t('ordersLoadFailed'));
+                return;
+            }
+
+            setTodayOrders(list);
+            setTodayOrdersLoaded(true);
+        } finally {
+            setIsLoadingTodayOrders(false);
         }
     };
 
@@ -740,7 +869,7 @@ export default function MainScreen({ navigation, route }) {
                             <Text
                                 style={[
                                     styles.cardTitle,
-                                    styles.pendingTitle,
+                                    styles.cardTitleFlex,
                                     { textAlign: isArabic ? 'right' : 'left' },
                                 ]}
                             >
@@ -904,141 +1033,76 @@ export default function MainScreen({ navigation, route }) {
                                     )}
                                 </TouchableOpacity>
 
-                                {/* Orders list */}
-                                {orders.length > 0 ? (
-                                    <View style={styles.ordersList}>
-                                        {orders.map((order, index) => {
-                                            const canTap = !order.paid && !!(order.barcode || order.invNo);
-                                            const meta = [
-                                                order.charger,
-                                                order.connector
-                                                    ? `${i18n.t('connectorLabel')} ${order.connector}`
-                                                    : '',
-                                                order.invNo || order.barcode,
-                                            ]
-                                                .filter(Boolean)
-                                                .join(' · ');
+                                <OrdersList
+                                    orders={orders}
+                                    loaded={ordersLoaded}
+                                    isArabic={isArabic}
+                                    onSelectOrder={onSelectOrder}
+                                />
+                            </View>
+                        ) : null}
+                    </View>
 
-                                            return (
-                                                <TouchableOpacity
-                                                    key={`${order.invNo}-${order.datetime}-${index}`}
-                                                    style={[
-                                                        styles.orderRow,
-                                                        index === orders.length - 1 &&
-                                                            styles.orderRowLast,
-                                                    ]}
-                                                    activeOpacity={canTap ? 0.7 : 1}
-                                                    disabled={!canTap}
-                                                    onPress={() => onSelectOrder(order)}
-                                                >
-                                                    <View
-                                                        style={[
-                                                            styles.orderTop,
-                                                            isArabic && styles.rowReverse,
-                                                        ]}
-                                                    >
-                                                        <Text style={styles.orderDate}>
-                                                            {order.datetime || '-'}
-                                                        </Text>
-                                                        <View
-                                                            style={[
-                                                                styles.badge,
-                                                                order.paid
-                                                                    ? styles.badgePaid
-                                                                    : styles.badgeUnpaid,
-                                                            ]}
-                                                        >
-                                                            <Text
-                                                                style={[
-                                                                    styles.badgeText,
-                                                                    order.paid
-                                                                        ? styles.badgeTextPaid
-                                                                        : styles.badgeTextUnpaid,
-                                                                ]}
-                                                            >
-                                                                {order.paid
-                                                                    ? i18n.t('paid')
-                                                                    : i18n.t('unpaid')}
-                                                            </Text>
-                                                        </View>
-                                                    </View>
+                    {/* Today's orders */}
+                    <View style={styles.card}>
+                        <TouchableOpacity
+                            style={[styles.cardHeader, isArabic && styles.rowReverse]}
+                            onPress={() => setTodayExpanded((prev) => !prev)}
+                            activeOpacity={0.85}
+                        >
+                            <MaterialIcons name="today" size={22} color={Constants.brandPrimary} />
+                            <Text
+                                style={[
+                                    styles.cardTitle,
+                                    styles.cardTitleFlex,
+                                    { textAlign: isArabic ? 'right' : 'left' },
+                                ]}
+                            >
+                                {i18n.t('todayOrders')}
+                            </Text>
+                            <MaterialIcons
+                                name={todayExpanded ? 'expand-less' : 'expand-more'}
+                                size={24}
+                                color={Constants.brandMuted}
+                            />
+                        </TouchableOpacity>
 
-                                                    <Text
-                                                        style={[
-                                                            styles.orderMeta,
-                                                            { textAlign: isArabic ? 'right' : 'left' },
-                                                        ]}
-                                                    >
-                                                        {meta || '-'}
-                                                    </Text>
+                        <Text
+                            style={[styles.cardSubtitle, { textAlign: isArabic ? 'right' : 'left' }]}
+                        >
+                            {i18n.t('todayOrdersSubtitle')}
+                        </Text>
 
-                                                    {order.user || order.car ? (
-                                                        <View
-                                                            style={[
-                                                                styles.orderDetailRow,
-                                                                isArabic && styles.rowReverse,
-                                                            ]}
-                                                        >
-                                                            {order.user ? (
-                                                                <View style={styles.orderDetail}>
-                                                                    <MaterialIcons
-                                                                        name="person-outline"
-                                                                        size={14}
-                                                                        color={Constants.brandMuted}
-                                                                    />
-                                                                    <Text style={styles.orderDetailText}>
-                                                                        {order.user}
-                                                                    </Text>
-                                                                </View>
-                                                            ) : null}
-                                                            {order.car ? (
-                                                                <View style={styles.orderDetail}>
-                                                                    <MaterialIcons
-                                                                        name="directions-car"
-                                                                        size={14}
-                                                                        color={Constants.brandMuted}
-                                                                    />
-                                                                    <Text style={styles.orderDetailText}>
-                                                                        {order.car}
-                                                                    </Text>
-                                                                </View>
-                                                            ) : null}
-                                                        </View>
-                                                    ) : null}
+                        {todayExpanded ? (
+                            <View>
+                                <TouchableOpacity
+                                    style={[
+                                        styles.checkButton,
+                                        isArabic && styles.rowReverse,
+                                        isLoadingTodayOrders && styles.buttonDisabled,
+                                    ]}
+                                    onPress={loadTodayOrders}
+                                    disabled={isLoadingTodayOrders}
+                                    activeOpacity={0.85}
+                                >
+                                    {isLoadingTodayOrders ? (
+                                        <ActivityIndicator size="small" color="#FFFFFF" />
+                                    ) : (
+                                        <>
+                                            <MaterialIcons name="search" size={20} color="#FFFFFF" />
+                                            <Text style={styles.checkButtonText}>
+                                                {i18n.t('showOrders')}
+                                            </Text>
+                                        </>
+                                    )}
+                                </TouchableOpacity>
 
-                                                    {canTap ? (
-                                                        <View
-                                                            style={[
-                                                                styles.orderTapHint,
-                                                                isArabic && styles.rowReverse,
-                                                            ]}
-                                                        >
-                                                            <MaterialIcons
-                                                                name="print"
-                                                                size={14}
-                                                                color={Constants.brandPrimary}
-                                                            />
-                                                            <Text style={styles.orderTapHintText}>
-                                                                {i18n.t('tapToPrint')}
-                                                            </Text>
-                                                        </View>
-                                                    ) : null}
-                                                </TouchableOpacity>
-                                            );
-                                        })}
-                                    </View>
-                                ) : ordersLoaded ? (
-                                    <View style={styles.ordersEmpty}>
-                                        <MaterialIcons
-                                            name="inbox"
-                                            size={34}
-                                            color={Constants.brandMuted}
-                                        />
-                                        <Text style={styles.ordersEmptyText}>
-                                            {i18n.t('noOrdersFound')}
-                                        </Text>
-                                    </View>
-                                ) : null}
+                                <OrdersList
+                                    orders={todayOrders}
+                                    loaded={todayOrdersLoaded}
+                                    isArabic={isArabic}
+                                    onSelectOrder={onSelectOrder}
+                                />
                             </View>
                         ) : null}
                     </View>
@@ -1425,7 +1489,8 @@ const styles = StyleSheet.create({
     },
 
     // Pending orders -------------------------------------------------------
-    pendingTitle: {
+    // Lets the card title take the space left between its icon and the chevron.
+    cardTitleFlex: {
         flex: 1,
     },
     fieldLabel: {

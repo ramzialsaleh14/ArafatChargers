@@ -92,6 +92,11 @@ export default {
   unpaid: "Unpaid",
   tapToPrint: "Tap to print",
 
+  // Today's orders
+  todayOrders: "Today's Orders",
+  todayOrdersSubtitle:
+    "Show all of today's orders for the current user (no charger or date selection needed).",
+
   // Language
   languageLabel: "العربية",
 
