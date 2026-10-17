@@ -101,7 +101,6 @@ export default {
   treatSectionTitle: "Complimentary Treat",
   treatSubtitle:
     "Enter the car number, date & time and number of treats, then press Print.",
-  treatCarPlaceholder: "00-00000",
   treatDateTimeLabel: "Date & time",
   numberOfTreats: "Number of treats",
   numberOfTreatsPlaceholder: "e.g. 2",

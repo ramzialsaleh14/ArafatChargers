@@ -96,7 +96,6 @@ export default {
   // Complimentary treats
   treatSectionTitle: "ضيافة",
   treatSubtitle: "أدخل رقم المركبة والتاريخ والوقت وعدد الضيافة ثم اضغط طباعة.",
-  treatCarPlaceholder: "00-00000",
   treatDateTimeLabel: "التاريخ والوقت",
   numberOfTreats: "عدد الضيافة",
   numberOfTreatsPlaceholder: "مثال: 2",

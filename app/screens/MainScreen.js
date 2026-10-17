@@ -244,7 +244,9 @@ export default function MainScreen({ navigation, route }) {
 
     // Complimentary treats (ضيافة) -------------------------------------
     const [treatExpanded, setTreatExpanded] = useState(false);
-    const [treatCar, setTreatCar] = useState('');
+    // Car plate is captured as two free-form parts shown as "00-00000".
+    const [treatCarPart1, setTreatCarPart1] = useState('');
+    const [treatCarPart2, setTreatCarPart2] = useState('');
     const [treatDateTime, setTreatDateTime] = useState(() =>
         Commons.formatDateTime(new Date())
     );
@@ -261,6 +263,10 @@ export default function MainScreen({ navigation, route }) {
     const showPaidScreen = !!result && !result.error && result.paid;
     const carNumber =
         carPart1.trim() && carPart2.trim() ? `${carPart1.trim()}-${carPart2.trim()}` : '';
+    const treatCar =
+        treatCarPart1.trim() && treatCarPart2.trim()
+            ? `${treatCarPart1.trim()}-${treatCarPart2.trim()}`
+            : '';
 
     // Code 128 barcode + QR code (both rendered from SVG) for the code the
     // server returned.
@@ -1296,18 +1302,35 @@ export default function MainScreen({ navigation, route }) {
                                 >
                                     {i18n.t('carNumber')}
                                 </Text>
-                                <TextInput
-                                    style={[
-                                        styles.filterInput,
-                                        { textAlign: isArabic ? 'right' : 'left' },
-                                    ]}
-                                    placeholder={i18n.t('treatCarPlaceholder')}
-                                    placeholderTextColor={Constants.brandMuted}
-                                    value={treatCar}
-                                    onChangeText={setTreatCar}
-                                    autoCapitalize="characters"
-                                    autoCorrect={false}
-                                />
+                                <View style={[styles.carInputRow, isArabic && styles.rowReverse]}>
+                                    <TextInput
+                                        style={[
+                                            styles.carInput,
+                                            styles.carInputFirst,
+                                            { textAlign: isArabic ? 'right' : 'left' },
+                                        ]}
+                                        placeholder={i18n.t('carNumberFirstPart')}
+                                        placeholderTextColor={Constants.brandMuted}
+                                        value={treatCarPart1}
+                                        onChangeText={setTreatCarPart1}
+                                        keyboardType="number-pad"
+                                        autoCorrect={false}
+                                    />
+                                    <Text style={styles.carDash}>-</Text>
+                                    <TextInput
+                                        style={[
+                                            styles.carInput,
+                                            styles.carInputSecond,
+                                            { textAlign: isArabic ? 'right' : 'left' },
+                                        ]}
+                                        placeholder={i18n.t('carNumberSecondPart')}
+                                        placeholderTextColor={Constants.brandMuted}
+                                        value={treatCarPart2}
+                                        onChangeText={setTreatCarPart2}
+                                        keyboardType="number-pad"
+                                        autoCorrect={false}
+                                    />
+                                </View>
 
                                 {/* Date & time (defaults to now) */}
                                 <Text
