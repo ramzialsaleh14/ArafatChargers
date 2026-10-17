@@ -480,3 +480,77 @@ export const getTodayOrders = async (user) => {
 
   return getPendingOrders("", "", fromDate, toDate, currentUser);
 };
+
+/**
+ * Creates a complimentary treat (ضيافة) for a car at the given date and time.
+ *
+ * `dateTime` is formatted as yyyy-MM-dd HH:mm:ss and `numOfTreats` is the
+ * number of treats being issued.
+ *
+ * Expected JSON payload:
+ *   { ERROR: boolean, SERIAL, MSG }
+ *
+ * Resolves to { ERROR, SERIAL, MSG }. ERROR is true (and SERIAL empty) on any
+ * failure, so callers can read SERIAL the same way on every call.
+ */
+export const addChargerTreat = async (user, car, dateTime, numOfTreats) => {
+  try {
+    /* Request params */
+    let params = "";
+    params += `action=${Constants.ADD_CHARGER_TREAT}`;
+    params += `&USER=${encodeURIComponent(user ?? "")}`;
+    params += `&CAR=${encodeURIComponent(car ?? "")}`;
+    params += `&DATETIME=${encodeURIComponent(dateTime ?? "")}`;
+    params += `&TREATS=${encodeURIComponent(numOfTreats ?? "")}`;
+
+    console.log("Add charger treat request params:", params);
+
+    /* Send request */
+    const response = await pickHttpRequest(params);
+
+    /* Check response */
+    if (response === Constants.networkError_code) {
+      console.error("Network error while adding charger treat");
+      return { ERROR: true, SERIAL: "", MSG: "", error: "network" };
+    }
+
+    if (response && response.ok) {
+      try {
+        const jsonResult = await response.json();
+        console.log("Add charger treat JSON result:", jsonResult);
+        // The service may wrap the result in a single element list or return
+        // the serial as a bare value.
+        const payload = Array.isArray(jsonResult) ? jsonResult[0] : jsonResult;
+        if (payload !== null && payload !== undefined && typeof payload !== "object") {
+          return { ERROR: false, SERIAL: String(payload).trim(), MSG: "" };
+        }
+        const serial = textOf(
+          pickValue(payload, [
+            "SERIAL",
+            "SERIAL_NO",
+            "SERIALNO",
+            "SERIAL_NUMBER",
+            "TREAT_SERIAL",
+            "TREATSERIAL",
+          ])
+        );
+        const error = flagOf(pickValue(payload, ["ERROR", "IS_ERROR", "ERR"]));
+        return {
+          // A receipt without a serial is not printable, so treat it as failed.
+          ERROR: error || !serial,
+          SERIAL: serial,
+          MSG: textOf(pickValue(payload, ["MSG", "MESSAGE", "ERROR_MSG", "ERR_MSG"])),
+        };
+      } catch (jsonError) {
+        console.error("Failed to parse JSON response:", jsonError);
+        return { ERROR: true, SERIAL: "", MSG: "", error: "invalid-response" };
+      }
+    }
+
+    console.error("Add charger treat failed - response not ok:", response);
+    return { ERROR: true, SERIAL: "", MSG: "", error: "server" };
+  } catch (error) {
+    console.error("Add charger treat request failed:", error);
+    return { ERROR: true, SERIAL: "", MSG: "", error: error.message };
+  }
+};

@@ -53,6 +53,46 @@ const splitCarPlate = (value) => {
     return [text, ''];
 };
 
+// Arabic-indic digits produced by some Arabic keyboards -> latin digits.
+const toLatinDigits = (value) =>
+    String(value ?? '').replace(/[٠-٩]/g, (digit) => String('٠١٢٣٤٥٦٧٨٩'.indexOf(digit)));
+
+const escapeHtml = (value) =>
+    String(value ?? '')
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;');
+
+// 58mm (5.8cm) thermal receipt paper, shared by every printed slip.
+const RECEIPT_CSS = `
+  @page { size: 58mm auto; margin: 0; }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; }
+  body {
+    width: 58mm;
+    margin: 0 auto;
+    padding: 3mm 3mm 5mm;
+    font-family: -apple-system, "Segoe UI", Roboto, Arial, sans-serif;
+    color: #123040;
+    font-size: 10px;
+    line-height: 1.35;
+  }
+  h1 { font-size: 13px; margin: 0 0 2px; color: ${Constants.brandPrimary}; }
+  .logo-wrap { text-align: center; margin-bottom: 2mm; }
+  .logo-wrap img { width: 46mm; height: 46mm; object-fit: contain; }
+  .sub { font-size: 9px; color: #6B7B85; margin-bottom: 5mm; }
+  .card { padding: 0; border: none; }
+  .code-wrap { text-align: center; margin-bottom: 3mm; }
+  .qr-code svg { display: block; width: 34mm; height: 34mm; margin: 0 auto 2mm; }
+  .code-text { font-size: 8px; word-break: break-all; margin-top: 2mm; }
+  table { width: 100%; border-collapse: collapse; margin-top: 2mm; }
+  td { padding: 1.5mm 0; border-bottom: 1px dotted #B9C6CA; font-size: 10px; }
+  td.label { color: #6B7B85; width: 45%; }
+  td.value { font-weight: 700; }
+  .footer { margin-top: 3mm; font-size: 8px; color: #9AA9AE; text-align: center; }
+`;
+
 // Order cards shared by the pending orders and today's orders lists.
 // Shows the "no orders" state once a load has completed without results.
 function OrdersList({ orders, loaded, isArabic, onSelectOrder }) {
@@ -201,6 +241,20 @@ export default function MainScreen({ navigation, route }) {
     const [todayOrders, setTodayOrders] = useState([]);
     const [todayOrdersLoaded, setTodayOrdersLoaded] = useState(false);
     const [isLoadingTodayOrders, setIsLoadingTodayOrders] = useState(false);
+
+    // Complimentary treats (ضيافة) -------------------------------------
+    const [treatExpanded, setTreatExpanded] = useState(false);
+    const [treatCar, setTreatCar] = useState('');
+    const [treatDateTime, setTreatDateTime] = useState(() =>
+        Commons.formatDateTime(new Date())
+    );
+    const [treatCount, setTreatCount] = useState('');
+    const [treatDatePickerVisible, setTreatDatePickerVisible] = useState(false);
+    const [isPrintingTreat, setIsPrintingTreat] = useState(false);
+    // Serial returned by the service for the last printed treat.
+    const [treatSerial, setTreatSerial] = useState('');
+    // Until the user picks a date, reopening the section refreshes it to now.
+    const treatDateTouchedRef = useRef(false);
 
     const isArabic = lang.startsWith('ar');
     const hasBarcode = barcode.trim().length > 0;
@@ -389,6 +443,16 @@ export default function MainScreen({ navigation, route }) {
         setOrdersExpanded((prev) => !prev);
     };
 
+    // Opens the treats section with a fresh "now" date unless the user has
+    // already chosen one.
+    const onToggleTreat = () => {
+        const next = !treatExpanded;
+        if (next && !treatDateTouchedRef.current) {
+            setTreatDateTime(Commons.formatDateTime(new Date()));
+        }
+        setTreatExpanded(next);
+    };
+
     const loadOrders = async () => {
         if (!selectedCharger) {
             Commons.okMsgAlert(i18n.t('chargerRequired'));
@@ -498,34 +562,8 @@ export default function MainScreen({ navigation, route }) {
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
 <title>${i18n.t('appTitle')}</title>
-<style>
-  /* 58mm (5.8cm) thermal receipt paper */
-  @page { size: 58mm auto; margin: 0; }
-  * { box-sizing: border-box; }
-  html, body { margin: 0; padding: 0; }
-  body {
-    width: 58mm;
-    margin: 0 auto;
-    padding: 3mm 3mm 5mm;
-    font-family: -apple-system, "Segoe UI", Roboto, Arial, sans-serif;
-    color: #123040;
-    font-size: 10px;
-    line-height: 1.35;
-  }
-  h1 { font-size: 13px; margin: 0 0 2px; color: ${Constants.brandPrimary}; }
-  .logo-wrap { text-align: center; margin-bottom: 2mm; }
-  .logo-wrap img { width: 46mm; height: 46mm; object-fit: contain; }
-  .sub { font-size: 9px; color: #6B7B85; margin-bottom: 5mm; }
-  .card { padding: 0; border: none; }
-  .code-wrap { text-align: center; margin-bottom: 3mm; }
-  .qr-code svg { display: block; width: 34mm; height: 34mm; margin: 0 auto 2mm; }
+<style>${RECEIPT_CSS}
   .bar-code svg { display: block; width: 100%; height: ${barcodeHeightMm}mm; }
-  .code-text { font-size: 8px; word-break: break-all; margin-top: 2mm; }
-  table { width: 100%; border-collapse: collapse; margin-top: 2mm; }
-  td { padding: 1.5mm 0; border-bottom: 1px dotted #B9C6CA; font-size: 10px; }
-  td.label { color: #6B7B85; width: 45%; }
-  td.value { font-weight: 700; }
-  .footer { margin-top: 3mm; font-size: 8px; color: #9AA9AE; text-align: center; }
 </style>
 </head>
 <body>
@@ -543,6 +581,82 @@ export default function MainScreen({ navigation, route }) {
 </html>`;
     };
 
+    const buildTreatPrintHtml = ({ serial, car, dateTime, count }) => {
+        const direction = isArabic ? 'rtl' : 'ltr';
+        const rows = [
+            [i18n.t('carNumber'), car],
+            [i18n.t('treatDateTimeLabel'), dateTime],
+            [i18n.t('numberOfTreats'), String(count)],
+        ]
+            .map(
+                ([label, value]) =>
+                    `<tr><td class="label">${escapeHtml(label)}</td><td class="value">${escapeHtml(
+                        value
+                    )}</td></tr>`
+            )
+            .join('');
+
+        return `<!DOCTYPE html>
+<html lang="${isArabic ? 'ar' : 'en'}" dir="${direction}">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>${i18n.t('treatPrintTitle')}</title>
+<style>${RECEIPT_CSS}
+  .treat-title { text-align: center; }
+  .serial-box {
+    margin-top: 3mm;
+    padding: 2mm;
+    border: 1px dashed ${Constants.brandPrimary};
+    border-radius: 2mm;
+    text-align: center;
+  }
+  .serial-label { font-size: 9px; color: #6B7B85; }
+  .serial-value { font-size: 16px; font-weight: 800; letter-spacing: 0.5px; }
+</style>
+</head>
+<body>
+  <div class="logo-wrap"><img src="${LOGO_DATA_URL}" alt="${i18n.t('appTitle')}" /></div>
+  <h1 class="treat-title">${i18n.t('treatSectionTitle')}</h1>
+  <div class="sub" style="text-align:center">${new Date().toLocaleString(
+      isArabic ? 'ar' : 'en-GB'
+  )}</div>
+  <div class="card">
+    <table>${rows}</table>
+    <div class="serial-box">
+      <div class="serial-label">${i18n.t('treatSerial')}</div>
+      <div class="serial-value">${escapeHtml(serial)}</div>
+    </div>
+  </div>
+</body>
+</html>`;
+    };
+
+    // Sends the receipt to the browser / OS print dialog.
+    const printDocument = async (html) => {
+        if (Platform.OS === 'web') {
+            const win = window.open('', '_blank');
+            if (!win) {
+                Commons.okMsgAlert(i18n.t('printFailed'));
+                return;
+            }
+            win.document.open();
+            win.document.write(html);
+            win.document.close();
+            win.focus();
+            setTimeout(() => win.print(), 350);
+            return;
+        }
+
+        try {
+            const Print = require('expo-print');
+            await Print.printAsync({ html });
+        } catch (error) {
+            console.error('Printing failed:', error);
+            Commons.okMsgAlert(i18n.t('printFailed'));
+        }
+    };
+
     const onPrint = async () => {
         if (!result || result.error || result.paid) {
             return;
@@ -554,32 +668,6 @@ export default function MainScreen({ navigation, route }) {
         }
 
         setIsPrinting(true);
-
-        const printHtml = async (codes) => {
-            const html = buildPrintHtml(codes);
-
-            if (Platform.OS === 'web') {
-                const win = window.open('', '_blank');
-                if (!win) {
-                    Commons.okMsgAlert(i18n.t('printFailed'));
-                    return;
-                }
-                win.document.open();
-                win.document.write(html);
-                win.document.close();
-                win.focus();
-                setTimeout(() => win.print(), 350);
-                return;
-            }
-
-            try {
-                const Print = require('expo-print');
-                await Print.printAsync({ html });
-            } catch (error) {
-                console.error('Printing failed:', error);
-                Commons.okMsgAlert(i18n.t('printFailed'));
-            }
-        };
 
         try {
             // The car number must be accepted by the server before printing.
@@ -596,12 +684,66 @@ export default function MainScreen({ navigation, route }) {
             }
 
             // Embed the QR code and the Code 128 barcode as inline SVG.
-            await printHtml({
-                qrSvg: qrModel ? qrModel.svg : null,
-                barcodeSvg: barcodeModel ? barcodeModel.svg : null,
-            });
+            await printDocument(
+                buildPrintHtml({
+                    qrSvg: qrModel ? qrModel.svg : null,
+                    barcodeSvg: barcodeModel ? barcodeModel.svg : null,
+                })
+            );
         } finally {
             setIsPrinting(false);
+        }
+    };
+
+    const onPrintTreat = async () => {
+        const car = treatCar.trim();
+        if (!car) {
+            Commons.okMsgAlert(i18n.t('carNumberRequired'));
+            return;
+        }
+
+        if (!Commons.parseDateTime(treatDateTime.trim())) {
+            Commons.okMsgAlert(i18n.t('invalidDate'));
+            return;
+        }
+
+        const count = Number(toLatinDigits(treatCount).replace(/\D/g, ''));
+        if (!count) {
+            Commons.okMsgAlert(i18n.t('treatCountRequired'));
+            return;
+        }
+
+        setIsPrintingTreat(true);
+        setTreatSerial('');
+
+        try {
+            const storedUser = await Commons.getFromAS('userID');
+            const user = storedUser || route?.params?.userName || '';
+
+            const saved = await ServerOperations.addChargerTreat(
+                user,
+                car,
+                treatDateTime.trim(),
+                count
+            );
+
+            if (!saved || truthy(saved.ERROR)) {
+                Commons.okMsgAlert(serverMessage(saved) || i18n.t('treatSaveFailed'));
+                return;
+            }
+
+            // The serial is issued by the service and printed on the voucher.
+            setTreatSerial(saved.SERIAL);
+            await printDocument(
+                buildTreatPrintHtml({
+                    serial: saved.SERIAL,
+                    car,
+                    dateTime: treatDateTime.trim(),
+                    count,
+                })
+            );
+        } finally {
+            setIsPrintingTreat(false);
         }
     };
 
@@ -1109,6 +1251,159 @@ export default function MainScreen({ navigation, route }) {
                         ) : null}
                     </View>
 
+                    {/* Complimentary treats */}
+                    <View style={styles.card}>
+                        <TouchableOpacity
+                            style={[styles.cardHeader, isArabic && styles.rowReverse]}
+                            onPress={onToggleTreat}
+                            activeOpacity={0.85}
+                        >
+                            <MaterialIcons
+                                name="local-cafe"
+                                size={22}
+                                color={Constants.brandPrimary}
+                            />
+                            <Text
+                                style={[
+                                    styles.cardTitle,
+                                    styles.cardTitleFlex,
+                                    { textAlign: isArabic ? 'right' : 'left' },
+                                ]}
+                            >
+                                {i18n.t('treatSectionTitle')}
+                            </Text>
+                            <MaterialIcons
+                                name={treatExpanded ? 'expand-less' : 'expand-more'}
+                                size={24}
+                                color={Constants.brandMuted}
+                            />
+                        </TouchableOpacity>
+
+                        <Text
+                            style={[styles.cardSubtitle, { textAlign: isArabic ? 'right' : 'left' }]}
+                        >
+                            {i18n.t('treatSubtitle')}
+                        </Text>
+
+                        {treatExpanded ? (
+                            <View>
+                                {/* Car number */}
+                                <Text
+                                    style={[
+                                        styles.fieldLabel,
+                                        { textAlign: isArabic ? 'right' : 'left' },
+                                    ]}
+                                >
+                                    {i18n.t('carNumber')}
+                                </Text>
+                                <TextInput
+                                    style={[
+                                        styles.filterInput,
+                                        { textAlign: isArabic ? 'right' : 'left' },
+                                    ]}
+                                    placeholder={i18n.t('treatCarPlaceholder')}
+                                    placeholderTextColor={Constants.brandMuted}
+                                    value={treatCar}
+                                    onChangeText={setTreatCar}
+                                    autoCapitalize="characters"
+                                    autoCorrect={false}
+                                />
+
+                                {/* Date & time (defaults to now) */}
+                                <Text
+                                    style={[
+                                        styles.fieldLabel,
+                                        styles.fieldLabelSpaced,
+                                        { textAlign: isArabic ? 'right' : 'left' },
+                                    ]}
+                                >
+                                    {i18n.t('treatDateTimeLabel')}
+                                </Text>
+                                <TouchableOpacity
+                                    style={[styles.dateField, isArabic && styles.rowReverse]}
+                                    onPress={() => setTreatDatePickerVisible(true)}
+                                    activeOpacity={0.85}
+                                >
+                                    <Text
+                                        style={[
+                                            styles.dateValue,
+                                            { textAlign: isArabic ? 'right' : 'left' },
+                                        ]}
+                                        numberOfLines={1}
+                                    >
+                                        {treatDateTime}
+                                    </Text>
+                                    <MaterialIcons
+                                        name="calendar-today"
+                                        size={18}
+                                        color={Constants.brandMuted}
+                                    />
+                                </TouchableOpacity>
+
+                                {/* Number of treats */}
+                                <Text
+                                    style={[
+                                        styles.fieldLabel,
+                                        styles.fieldLabelSpaced,
+                                        { textAlign: isArabic ? 'right' : 'left' },
+                                    ]}
+                                >
+                                    {i18n.t('numberOfTreats')}
+                                </Text>
+                                <TextInput
+                                    style={[
+                                        styles.filterInput,
+                                        { textAlign: isArabic ? 'right' : 'left' },
+                                    ]}
+                                    placeholder={i18n.t('numberOfTreatsPlaceholder')}
+                                    placeholderTextColor={Constants.brandMuted}
+                                    value={treatCount}
+                                    onChangeText={(text) =>
+                                        setTreatCount(text.replace(/[^0-9٠-٩]/g, ''))
+                                    }
+                                    keyboardType="number-pad"
+                                    maxLength={4}
+                                    autoCorrect={false}
+                                />
+
+                                <TouchableOpacity
+                                    style={[
+                                        styles.checkButton,
+                                        isArabic && styles.rowReverse,
+                                        isPrintingTreat && styles.buttonDisabled,
+                                    ]}
+                                    onPress={onPrintTreat}
+                                    disabled={isPrintingTreat}
+                                    activeOpacity={0.85}
+                                >
+                                    {isPrintingTreat ? (
+                                        <ActivityIndicator size="small" color="#FFFFFF" />
+                                    ) : (
+                                        <>
+                                            <MaterialIcons
+                                                name="print"
+                                                size={20}
+                                                color="#FFFFFF"
+                                            />
+                                            <Text style={styles.checkButtonText}>
+                                                {i18n.t('print')}
+                                            </Text>
+                                        </>
+                                    )}
+                                </TouchableOpacity>
+
+                                {treatSerial ? (
+                                    <View style={styles.treatSerialBox}>
+                                        <Text style={styles.treatSerialLabel}>
+                                            {i18n.t('treatSerial')}
+                                        </Text>
+                                        <Text style={styles.treatSerialValue}>{treatSerial}</Text>
+                                    </View>
+                                ) : null}
+                            </View>
+                        ) : null}
+                    </View>
+
                     {/* Footer */}
                     <View style={[styles.footer, isArabic && styles.rowReverse]}>
                         <TouchableOpacity style={styles.footerButton} onPress={onLogout}>
@@ -1160,6 +1455,17 @@ export default function MainScreen({ navigation, route }) {
                         }
                     }}
                     onClose={() => setDatePickerTarget(null)}
+                />
+
+                <DatePickerModal
+                    visible={treatDatePickerVisible}
+                    title={i18n.t('treatDateTimeLabel')}
+                    value={treatDateTime}
+                    onSelect={(value) => {
+                        treatDateTouchedRef.current = true;
+                        setTreatDateTime(value);
+                    }}
+                    onClose={() => setTreatDatePickerVisible(false)}
                 />
 
                 <ProgressDialog visible={isChecking} title={i18n.t('checking')} />
@@ -1643,6 +1949,31 @@ const styles = StyleSheet.create({
         color: Constants.brandMuted,
         marginTop: 8,
         textAlign: 'center',
+    },
+
+    // Complimentary treats -------------------------------------------------
+    treatSerialBox: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        marginTop: 14,
+        paddingHorizontal: 14,
+        paddingVertical: 12,
+        borderRadius: 14,
+        backgroundColor: '#E4F4EA',
+        borderWidth: 1,
+        borderColor: '#C9E9D5',
+    },
+    treatSerialLabel: {
+        fontSize: 13,
+        color: Constants.brandSuccess,
+        marginHorizontal: 4,
+    },
+    treatSerialValue: {
+        fontSize: 16,
+        fontWeight: '800',
+        color: Constants.brandSuccess,
+        marginHorizontal: 4,
     },
 
     // Footer ---------------------------------------------------------------

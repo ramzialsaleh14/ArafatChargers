@@ -93,6 +93,18 @@ export default {
   todayOrders: "طلبات اليوم",
   todayOrdersSubtitle: "عرض كل طلبات اليوم للمستخدم الحالي (بدون اختيار الشاحن أو التاريخ).",
 
+  // Complimentary treats
+  treatSectionTitle: "ضيافة",
+  treatSubtitle: "أدخل رقم المركبة والتاريخ والوقت وعدد الضيافة ثم اضغط طباعة.",
+  treatCarPlaceholder: "00-00000",
+  treatDateTimeLabel: "التاريخ والوقت",
+  numberOfTreats: "عدد الضيافة",
+  numberOfTreatsPlaceholder: "مثال: 2",
+  treatCountRequired: "يرجى إدخال عدد الضيافة.",
+  treatSaveFailed: "فشل حفظ الضيافة. يرجى المحاولة مرة أخرى.",
+  treatSerial: "الرقم التسلسلي",
+  treatPrintTitle: "قسيمة ضيافة",
+
   // Language
   languageLabel: "English",
 

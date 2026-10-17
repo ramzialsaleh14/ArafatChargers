@@ -97,6 +97,19 @@ export default {
   todayOrdersSubtitle:
     "Show all of today's orders for the current user (no charger or date selection needed).",
 
+  // Complimentary treats
+  treatSectionTitle: "Complimentary Treat",
+  treatSubtitle:
+    "Enter the car number, date & time and number of treats, then press Print.",
+  treatCarPlaceholder: "00-00000",
+  treatDateTimeLabel: "Date & time",
+  numberOfTreats: "Number of treats",
+  numberOfTreatsPlaceholder: "e.g. 2",
+  treatCountRequired: "Please enter the number of treats.",
+  treatSaveFailed: "Failed to save the treat. Please try again.",
+  treatSerial: "Serial Number",
+  treatPrintTitle: "Treat Voucher",
+
   // Language
   languageLabel: "العربية",
 

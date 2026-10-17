@@ -69,6 +69,7 @@ export const GET_CHARGER_INFO = "GET.CHARGER.INFO";
 export const SET_CHARGER_CAR = "SET.CHARGER.CAR";
 export const GET_CHARGERS = "GET.CHARGERS";
 export const GET_PENDING_ORDERS = "GET.PENDING.ORDERS";
+export const ADD_CHARGER_TREAT = "ADD.CHARGER.TREAT";
 export const CHANGE_PASSWORD = "CHANGE.PASSWORD";
 
 // Small helper so screens can adapt layouts for Arabic.
