@@ -592,13 +592,13 @@ export default function MainScreen({ navigation, route }) {
         const rows = [
             [i18n.t('carNumber'), car],
             [i18n.t('treatDateTimeLabel'), dateTime],
-            [i18n.t('numberOfTreats'), String(count)],
+            [i18n.t('numberOfTreats'), String(count), 'treats-row'],
         ]
             .map(
-                ([label, value]) =>
-                    `<tr><td class="label">${escapeHtml(label)}</td><td class="value">${escapeHtml(
-                        value
-                    )}</td></tr>`
+                ([label, value, rowClass]) =>
+                    `<tr${rowClass ? ` class="${rowClass}"` : ''}><td class="label">${escapeHtml(
+                        label
+                    )}</td><td class="value">${escapeHtml(value)}</td></tr>`
             )
             .join('');
 
@@ -611,7 +611,7 @@ export default function MainScreen({ navigation, route }) {
 <style>${RECEIPT_CSS}
   .treat-title { text-align: center; }
   .serial-box {
-    margin-top: 3mm;
+    margin-bottom: 4mm;
     padding: 2mm;
     border: 1px dashed ${Constants.brandPrimary};
     border-radius: 2mm;
@@ -619,6 +619,9 @@ export default function MainScreen({ navigation, route }) {
   }
   .serial-label { font-size: 9px; color: #6B7B85; }
   .serial-value { font-size: 16px; font-weight: 800; letter-spacing: 0.5px; }
+  tr.treats-row td { padding: 3mm 0; }
+  tr.treats-row td.label { font-size: 11px; }
+  tr.treats-row td.value { font-size: 22px; color: ${Constants.brandPrimary}; }
 </style>
 </head>
 <body>
@@ -628,11 +631,11 @@ export default function MainScreen({ navigation, route }) {
       isArabic ? 'ar' : 'en-GB'
   )}</div>
   <div class="card">
-    <table>${rows}</table>
     <div class="serial-box">
       <div class="serial-label">${i18n.t('treatSerial')}</div>
       <div class="serial-value">${escapeHtml(serial)}</div>
     </div>
+    <table>${rows}</table>
   </div>
 </body>
 </html>`;
