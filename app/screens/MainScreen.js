@@ -660,13 +660,7 @@ export default function MainScreen({ navigation, route }) {
             .map((order, index) => {
                 const rows = [
                     [i18n.t('dateTimeLabel'), order.datetime],
-                    [i18n.t('paid'), order.paid ? i18n.t('paid') : i18n.t('unpaid')],
-                    [i18n.t('chargerLabel'), order.charger],
-                    [i18n.t('connectorLabel'), order.connector],
-                    [i18n.t('invNoLabel'), order.invNo],
-                    [i18n.t('barcode'), order.barcode],
                     [i18n.t('userLabel'), order.user],
-                    [i18n.t('carNumber'), order.car],
                     [i18n.t('kwh'), order.kwh],
                     [i18n.t('totalAmount'), order.totalAmount],
                 ]
@@ -680,7 +674,7 @@ export default function MainScreen({ navigation, route }) {
                     .join('');
 
                 return `<section class="order">
-  <h1>${escapeHtml(i18n.t('todayOrders'))} #${index + 1}</h1>
+  <h1>#${index + 1}</h1>
   <table>${rows}</table>
 </section>`;
             })
@@ -693,17 +687,21 @@ export default function MainScreen({ navigation, route }) {
 <meta name="viewport" content="width=device-width, initial-scale=1" />
 <title>${escapeHtml(i18n.t('todayOrders'))}</title>
 <style>${RECEIPT_CSS}
-  .logo-wrap img { width: 36mm; height: 36mm; }
+  .logo-wrap { margin-bottom: 1mm; }
+  .logo-wrap img { width: 20mm; height: 20mm; }
   .document-title { text-align: center; }
+  .sub { margin-bottom: 2mm; }
   .order {
-    margin-top: 4mm;
-    padding-bottom: 3mm;
+    margin-top: 2mm;
+    padding-bottom: 1.5mm;
     border-bottom: 1px dashed #9AA9AE;
     break-inside: avoid;
     page-break-inside: avoid;
   }
-  .order h1 { margin-bottom: 1mm; }
-  .summary { margin-top: 5mm; break-inside: avoid; page-break-inside: avoid; }
+  .order h1 { font-size: 11px; margin-bottom: 0; }
+  .order table { margin-top: 0; }
+  .order td { padding: 1mm 0; }
+  .summary { margin-top: 3mm; break-inside: avoid; page-break-inside: avoid; }
 </style>
 </head>
 <body>
