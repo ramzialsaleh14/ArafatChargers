@@ -656,29 +656,27 @@ export default function MainScreen({ navigation, route }) {
 
     const buildTodayOrdersPrintHtml = (ordersToPrint, totals) => {
         const direction = isArabic ? 'rtl' : 'ltr';
-        const orderCards = ordersToPrint
-            .map((order, index) => {
-                const rows = [
-                    [i18n.t('dateTimeLabel'), order.datetime],
-                    [i18n.t('userLabel'), order.user],
-                    [i18n.t('kwh'), order.kwh],
-                    [i18n.t('totalAmount'), order.totalAmount],
-                ]
-                    .filter(([, value]) => value !== undefined && value !== null && value !== '')
-                    .map(
-                        ([label, value]) =>
-                            `<tr><td class="label">${escapeHtml(label)}</td><td class="value">${escapeHtml(
-                                value
-                            )}</td></tr>`
-                    )
-                    .join('');
-
-                return `<section class="order">
-  <h1>#${index + 1}</h1>
-  <table>${rows}</table>
-</section>`;
-            })
+        const reportFontSize = Math.max(
+            3,
+            Math.min(10, (165 / Math.max(ordersToPrint.length, 1) - 0.3) / 0.278)
+        );
+        const orderRows = ordersToPrint
+            .map(
+                (order, index) => `<tr>
+  <td>${index + 1}</td>
+  <td>${escapeHtml(order.datetime || '-')}</td>
+  <td>${escapeHtml(order.user || '-')}</td>
+  <td>${escapeHtml(order.kwh)}</td>
+  <td>${escapeHtml(order.totalAmount)}</td>
+</tr>`
+            )
             .join('');
+        const totalKwh = totals.kwh.toLocaleString(isArabic ? 'ar' : 'en-GB', {
+            maximumFractionDigits: 6,
+        });
+        const totalAmount = totals.totalAmount.toLocaleString(isArabic ? 'ar' : 'en-GB', {
+            maximumFractionDigits: 6,
+        });
 
         return `<!DOCTYPE html>
 <html lang="${isArabic ? 'ar' : 'en'}" dir="${direction}">
@@ -686,42 +684,58 @@ export default function MainScreen({ navigation, route }) {
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
 <title>${escapeHtml(i18n.t('todayOrders'))}</title>
-<style>${RECEIPT_CSS}
-  .logo-wrap { margin-bottom: 1mm; }
-  .logo-wrap img { width: 20mm; height: 20mm; }
-  .document-title { text-align: center; }
-  .sub { margin-bottom: 2mm; }
-  .order {
-    margin-top: 2mm;
-    padding-bottom: 1.5mm;
-    border-bottom: 1px dashed #9AA9AE;
-    break-inside: avoid;
-    page-break-inside: avoid;
+<style>
+  @page { size: A4 landscape; margin: 8mm; }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; }
+  body {
+    width: 100%;
+    color: #123040;
+    font-family: -apple-system, "Segoe UI", Roboto, Arial, sans-serif;
+    font-size: ${reportFontSize}px;
+    line-height: 1.05;
   }
-  .order h1 { font-size: 11px; margin-bottom: 0; }
-  .order table { margin-top: 0; }
-  .order td { padding: 1mm 0; }
-  .summary { margin-top: 3mm; break-inside: avoid; page-break-inside: avoid; }
+  h1 { margin: 0; color: ${Constants.brandPrimary}; font-size: 1.5em; }
+  .report-header { text-align: center; margin-bottom: 2mm; }
+  .sub { margin-top: 1mm; color: #6B7B85; font-size: 0.9em; }
+  .report-table { width: 100%; border-collapse: collapse; table-layout: fixed; }
+  .report-table th, .report-table td {
+    padding: 0.15mm 0.8mm;
+    border-bottom: 0.15mm solid #D5DFE2;
+    font-size: inherit;
+    text-align: start;
+    overflow-wrap: anywhere;
+  }
+  .report-table th { color: #6B7B85; font-weight: 700; }
+  .report-table th:first-child, .report-table td:first-child { width: 5%; text-align: center; }
+  .report-table th:nth-child(2), .report-table td:nth-child(2) { width: 28%; }
+  .report-table th:nth-child(3), .report-table td:nth-child(3) { width: 27%; }
+  .report-table th:nth-child(4), .report-table td:nth-child(4) { width: 18%; }
+  .report-table th:nth-child(5), .report-table td:nth-child(5) { width: 22%; }
+  .summary { margin-top: 2mm; break-inside: avoid; page-break-inside: avoid; }
+  .summary-table { width: 42%; margin-inline-start: auto; }
 </style>
 </head>
 <body>
-  <div class="logo-wrap"><img src="${LOGO_DATA_URL}" alt="${escapeHtml(
-            i18n.t('appTitle')
-        )}" /></div>
-  <h1 class="document-title">${escapeHtml(i18n.t('todayOrders'))}</h1>
-  <div class="sub">${new Date().toLocaleString(isArabic ? 'ar' : 'en-GB')}</div>
-  ${orderCards}
+  <header class="report-header">
+    <h1>${escapeHtml(i18n.t('todayOrders'))}</h1>
+    <div class="sub">${new Date().toLocaleString(isArabic ? 'ar' : 'en-GB')}</div>
+  </header>
+  <table class="report-table">
+    <thead><tr>
+      <th>#</th>
+      <th>${escapeHtml(i18n.t('dateTimeLabel'))}</th>
+      <th>${escapeHtml(i18n.t('userLabel'))}</th>
+      <th>${escapeHtml(i18n.t('kwh'))}</th>
+      <th>${escapeHtml(i18n.t('totalAmount'))}</th>
+    </tr></thead>
+    <tbody>${orderRows}</tbody>
+  </table>
   <section class="summary">
     <h1>${escapeHtml(i18n.t('ordersGrandTotal'))}</h1>
-    <table>
-      <tr><td class="label">${escapeHtml(i18n.t('kwh'))}</td><td class="value">${escapeHtml(
-            totals.kwh.toLocaleString(isArabic ? 'ar' : 'en-GB', { maximumFractionDigits: 6 })
-        )}</td></tr>
-      <tr><td class="label">${escapeHtml(i18n.t('totalAmount'))}</td><td class="value">${escapeHtml(
-            totals.totalAmount.toLocaleString(isArabic ? 'ar' : 'en-GB', {
-                maximumFractionDigits: 6,
-            })
-        )}</td></tr>
+    <table class="report-table summary-table">
+      <tr><th>${escapeHtml(i18n.t('kwh'))}</th><td>${escapeHtml(totalKwh)}</td></tr>
+      <tr><th>${escapeHtml(i18n.t('totalAmount'))}</th><td>${escapeHtml(totalAmount)}</td></tr>
     </table>
   </section>
 </body>
