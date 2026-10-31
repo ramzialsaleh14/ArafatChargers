@@ -734,6 +734,8 @@ export default function MainScreen({ navigation, route }) {
         try {
             const storedUser = await Commons.getFromAS('userID');
             const user = storedUser || route?.params?.userName || '';
+            const storedUserName = await Commons.getFromAS('userName');
+            const displayName = storedUserName || route?.params?.userName || storedUser || '';
             const ordersWithTotals = [];
 
             for (let index = 0; index < todayOrders.length; index += 5) {
@@ -783,7 +785,7 @@ export default function MainScreen({ navigation, route }) {
                 { kwh: 0, totalAmount: 0 }
             );
 
-            await printDocument(buildTodayOrdersPrintHtml(ordersWithTotals, totals, user));
+            await printDocument(buildTodayOrdersPrintHtml(ordersWithTotals, totals, displayName));
         } catch (error) {
             console.error('Printing today orders failed:', error);
             Commons.okMsgAlert(i18n.t('orderTotalsLoadFailed'));
