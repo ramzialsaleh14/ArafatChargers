@@ -96,6 +96,8 @@ export default {
   todayOrders: "Today's Orders",
   printAll: "Print All",
   ordersGrandTotal: "Grand Total",
+  numberOfOrders: "Number of Orders",
+  printDateTimeLabel: "Print Date & Time",
   orderTotalsLoadFailed: "Could not load or calculate all order quantities and prices. Please try again.",
   todayOrdersSubtitle:
     "Show all of today's orders for the current user (no charger or date selection needed).",
