@@ -92,6 +92,8 @@ export default {
   // Today's orders
   todayOrders: "طلبات اليوم",
   printAll: "طباعة الكل",
+  ordersGrandTotal: "الإجمالي الكلي",
+  orderTotalsLoadFailed: "تعذر تحميل أو حساب كميات وأسعار جميع الطلبات. يرجى المحاولة مرة أخرى.",
   todayOrdersSubtitle: "عرض كل طلبات اليوم للمستخدم الحالي (بدون اختيار الشاحن أو التاريخ).",
 
   // Complimentary treats

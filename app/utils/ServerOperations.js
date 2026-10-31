@@ -343,6 +343,8 @@ const ORDER_FIELDS = {
   // The code handed to the check / print flow (BARCODE when the order has one).
   barcode: ["BARCODE", "BAR_CODE", ...INVNO_FIELDS, "QRCODE", "CODE"],
   paid: ["PAID", "IS_PAID", "ISPAID", "PAYED", "PAID_FLAG"],
+  kwh: ["KWH", "QTY", "QUANTITY", "TOTAL_KWH", "TOTAL_QTY"],
+  totalAmount: ["TOTAL_AMOUNT", "TOTALAMOUNT", "TOTAL_PRICE", "PRICE", "AMOUNT"],
 };
 
 // Maps any of the field-name flavours the service may use to one shape.
@@ -360,6 +362,8 @@ const normalizeOrder = (raw) => {
     invNo: textOf(pickValue(source, ORDER_FIELDS.invNo)),
     barcode: textOf(pickValue(source, ORDER_FIELDS.barcode)),
     paid: flagOf(pickValue(source, ORDER_FIELDS.paid)),
+    kwh: textOf(pickValue(source, ORDER_FIELDS.kwh)),
+    totalAmount: textOf(pickValue(source, ORDER_FIELDS.totalAmount)),
   };
 };
 
@@ -414,7 +418,7 @@ export const getChargers = async (user) => {
  * "all connectors"). `user` is optional and is sent as an empty string when
  * not given; today's orders pass it so the service filters by that user. Each
  * order is normalised to:
- *   { datetime, charger, connector, user, car, invNo, barcode, paid }
+ *   { datetime, charger, connector, user, car, invNo, barcode, paid, kwh, totalAmount }
  *
  * Resolves to an array (possibly empty) on success, or null when the request
  * fails, so the caller can tell "nothing found" from "could not load".

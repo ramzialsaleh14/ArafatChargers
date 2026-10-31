@@ -57,6 +57,18 @@ const splitCarPlate = (value) => {
 const toLatinDigits = (value) =>
     String(value ?? '').replace(/[٠-٩]/g, (digit) => String('٠١٢٣٤٥٦٧٨٩'.indexOf(digit)));
 
+const parseOrderTotal = (value) => {
+    const normalized = toLatinDigits(value)
+        .replace(/[٬,]/g, '')
+        .replace(/٫/g, '.')
+        .trim();
+    if (!normalized) {
+        return null;
+    }
+    const total = Number(normalized);
+    return Number.isFinite(total) ? total : null;
+};
+
 const escapeHtml = (value) =>
     String(value ?? '')
         .replace(/&/g, '&amp;')
@@ -642,7 +654,7 @@ export default function MainScreen({ navigation, route }) {
 </html>`;
     };
 
-    const buildTodayOrdersPrintHtml = (ordersToPrint) => {
+    const buildTodayOrdersPrintHtml = (ordersToPrint, totals) => {
         const direction = isArabic ? 'rtl' : 'ltr';
         const orderCards = ordersToPrint
             .map((order, index) => {
@@ -655,6 +667,8 @@ export default function MainScreen({ navigation, route }) {
                     [i18n.t('barcode'), order.barcode],
                     [i18n.t('userLabel'), order.user],
                     [i18n.t('carNumber'), order.car],
+                    [i18n.t('kwh'), order.kwh],
+                    [i18n.t('totalAmount'), order.totalAmount],
                 ]
                     .filter(([, value]) => value !== undefined && value !== null && value !== '')
                     .map(
@@ -689,6 +703,7 @@ export default function MainScreen({ navigation, route }) {
     page-break-inside: avoid;
   }
   .order h1 { margin-bottom: 1mm; }
+  .summary { margin-top: 5mm; break-inside: avoid; page-break-inside: avoid; }
 </style>
 </head>
 <body>
@@ -698,6 +713,19 @@ export default function MainScreen({ navigation, route }) {
   <h1 class="document-title">${escapeHtml(i18n.t('todayOrders'))}</h1>
   <div class="sub">${new Date().toLocaleString(isArabic ? 'ar' : 'en-GB')}</div>
   ${orderCards}
+  <section class="summary">
+    <h1>${escapeHtml(i18n.t('ordersGrandTotal'))}</h1>
+    <table>
+      <tr><td class="label">${escapeHtml(i18n.t('kwh'))}</td><td class="value">${escapeHtml(
+            totals.kwh.toLocaleString(isArabic ? 'ar' : 'en-GB', { maximumFractionDigits: 6 })
+        )}</td></tr>
+      <tr><td class="label">${escapeHtml(i18n.t('totalAmount'))}</td><td class="value">${escapeHtml(
+            totals.totalAmount.toLocaleString(isArabic ? 'ar' : 'en-GB', {
+                maximumFractionDigits: 6,
+            })
+        )}</td></tr>
+    </table>
+  </section>
 </body>
 </html>`;
     };
@@ -734,7 +762,61 @@ export default function MainScreen({ navigation, route }) {
 
         setIsPrintingTodayOrders(true);
         try {
-            await printDocument(buildTodayOrdersPrintHtml(todayOrders));
+            const storedUser = await Commons.getFromAS('userID');
+            const user = storedUser || route?.params?.userName || '';
+            const ordersWithTotals = [];
+
+            for (let index = 0; index < todayOrders.length; index += 5) {
+                const batch = todayOrders.slice(index, index + 5);
+                const detailedBatch = await Promise.all(
+                    batch.map(async (order) => {
+                        const hasKwh = order.kwh !== undefined && order.kwh !== '';
+                        const hasAmount =
+                            order.totalAmount !== undefined && order.totalAmount !== '';
+                        if (hasKwh && hasAmount) {
+                            return order;
+                        }
+
+                        const code = order.barcode || order.invNo;
+                        if (!code) {
+                            throw new Error('Order has no barcode or invoice number');
+                        }
+
+                        const response = await ServerOperations.getChargerInfo(user, code);
+                        if (!response || truthy(response.ERROR)) {
+                            throw new Error(
+                                serverMessage(response) || `Failed to load order ${code}`
+                            );
+                        }
+
+                        return {
+                            ...order,
+                            kwh: hasKwh ? order.kwh : response.KWH,
+                            totalAmount: hasAmount ? order.totalAmount : response.TOTAL_AMOUNT,
+                        };
+                    })
+                );
+                ordersWithTotals.push(...detailedBatch);
+            }
+
+            const totals = ordersWithTotals.reduce(
+                (sum, order) => {
+                    const kwh = parseOrderTotal(order.kwh);
+                    const amount = parseOrderTotal(order.totalAmount);
+                    if (kwh === null || amount === null) {
+                        throw new Error(`Invalid totals for order ${order.invNo || order.barcode}`);
+                    }
+                    sum.kwh += kwh;
+                    sum.totalAmount += amount;
+                    return sum;
+                },
+                { kwh: 0, totalAmount: 0 }
+            );
+
+            await printDocument(buildTodayOrdersPrintHtml(ordersWithTotals, totals));
+        } catch (error) {
+            console.error('Printing today orders failed:', error);
+            Commons.okMsgAlert(i18n.t('orderTotalsLoadFailed'));
         } finally {
             setIsPrintingTodayOrders(false);
         }
