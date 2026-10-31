@@ -94,6 +94,7 @@ export default {
 
   // Today's orders
   todayOrders: "Today's Orders",
+  printAll: "Print All",
   todayOrdersSubtitle:
     "Show all of today's orders for the current user (no charger or date selection needed).",
 

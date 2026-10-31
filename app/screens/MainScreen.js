@@ -241,6 +241,7 @@ export default function MainScreen({ navigation, route }) {
     const [todayOrders, setTodayOrders] = useState([]);
     const [todayOrdersLoaded, setTodayOrdersLoaded] = useState(false);
     const [isLoadingTodayOrders, setIsLoadingTodayOrders] = useState(false);
+    const [isPrintingTodayOrders, setIsPrintingTodayOrders] = useState(false);
 
     // Complimentary treats (ضيافة) -------------------------------------
     const [treatExpanded, setTreatExpanded] = useState(false);
@@ -641,6 +642,66 @@ export default function MainScreen({ navigation, route }) {
 </html>`;
     };
 
+    const buildTodayOrdersPrintHtml = (ordersToPrint) => {
+        const direction = isArabic ? 'rtl' : 'ltr';
+        const orderCards = ordersToPrint
+            .map((order, index) => {
+                const rows = [
+                    [i18n.t('dateTimeLabel'), order.datetime],
+                    [i18n.t('paid'), order.paid ? i18n.t('paid') : i18n.t('unpaid')],
+                    [i18n.t('chargerLabel'), order.charger],
+                    [i18n.t('connectorLabel'), order.connector],
+                    [i18n.t('invNoLabel'), order.invNo],
+                    [i18n.t('barcode'), order.barcode],
+                    [i18n.t('userLabel'), order.user],
+                    [i18n.t('carNumber'), order.car],
+                ]
+                    .filter(([, value]) => value !== undefined && value !== null && value !== '')
+                    .map(
+                        ([label, value]) =>
+                            `<tr><td class="label">${escapeHtml(label)}</td><td class="value">${escapeHtml(
+                                value
+                            )}</td></tr>`
+                    )
+                    .join('');
+
+                return `<section class="order">
+  <h1>${escapeHtml(i18n.t('todayOrders'))} #${index + 1}</h1>
+  <table>${rows}</table>
+</section>`;
+            })
+            .join('');
+
+        return `<!DOCTYPE html>
+<html lang="${isArabic ? 'ar' : 'en'}" dir="${direction}">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>${escapeHtml(i18n.t('todayOrders'))}</title>
+<style>${RECEIPT_CSS}
+  .logo-wrap img { width: 36mm; height: 36mm; }
+  .document-title { text-align: center; }
+  .order {
+    margin-top: 4mm;
+    padding-bottom: 3mm;
+    border-bottom: 1px dashed #9AA9AE;
+    break-inside: avoid;
+    page-break-inside: avoid;
+  }
+  .order h1 { margin-bottom: 1mm; }
+</style>
+</head>
+<body>
+  <div class="logo-wrap"><img src="${LOGO_DATA_URL}" alt="${escapeHtml(
+            i18n.t('appTitle')
+        )}" /></div>
+  <h1 class="document-title">${escapeHtml(i18n.t('todayOrders'))}</h1>
+  <div class="sub">${new Date().toLocaleString(isArabic ? 'ar' : 'en-GB')}</div>
+  ${orderCards}
+</body>
+</html>`;
+    };
+
     // Sends the receipt to the browser / OS print dialog.
     const printDocument = async (html) => {
         if (Platform.OS === 'web') {
@@ -663,6 +724,19 @@ export default function MainScreen({ navigation, route }) {
         } catch (error) {
             console.error('Printing failed:', error);
             Commons.okMsgAlert(i18n.t('printFailed'));
+        }
+    };
+
+    const onPrintAllTodayOrders = async () => {
+        if (!todayOrdersLoaded || todayOrders.length === 0 || isPrintingTodayOrders) {
+            return;
+        }
+
+        setIsPrintingTodayOrders(true);
+        try {
+            await printDocument(buildTodayOrdersPrintHtml(todayOrders));
+        } finally {
+            setIsPrintingTodayOrders(false);
         }
     };
 
@@ -1250,6 +1324,35 @@ export default function MainScreen({ navigation, route }) {
                                     )}
                                 </TouchableOpacity>
 
+                                {todayOrdersLoaded && todayOrders.length > 0 ? (
+                                    <TouchableOpacity
+                                        style={[
+                                            styles.checkButton,
+                                            isArabic && styles.rowReverse,
+                                            styles.todayPrintButton,
+                                            isPrintingTodayOrders && styles.buttonDisabled,
+                                        ]}
+                                        onPress={onPrintAllTodayOrders}
+                                        disabled={isPrintingTodayOrders}
+                                        activeOpacity={0.85}
+                                    >
+                                        {isPrintingTodayOrders ? (
+                                            <ActivityIndicator size="small" color="#FFFFFF" />
+                                        ) : (
+                                            <>
+                                                <MaterialIcons
+                                                    name="print"
+                                                    size={20}
+                                                    color="#FFFFFF"
+                                                />
+                                                <Text style={styles.checkButtonText}>
+                                                    {i18n.t('printAll')}
+                                                </Text>
+                                            </>
+                                        )}
+                                    </TouchableOpacity>
+                                ) : null}
+
                                 <OrdersList
                                     orders={todayOrders}
                                     loaded={todayOrdersLoaded}
@@ -1655,6 +1758,10 @@ const styles = StyleSheet.create({
         borderRadius: 14,
         backgroundColor: Constants.brandPrimary,
         marginTop: 14,
+    },
+    todayPrintButton: {
+        backgroundColor: Constants.brandSuccess,
+        marginTop: 10,
     },
     checkButtonText: {
         color: '#FFFFFF',

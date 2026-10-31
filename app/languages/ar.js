@@ -91,6 +91,7 @@ export default {
 
   // Today's orders
   todayOrders: "طلبات اليوم",
+  printAll: "طباعة الكل",
   todayOrdersSubtitle: "عرض كل طلبات اليوم للمستخدم الحالي (بدون اختيار الشاحن أو التاريخ).",
 
   // Complimentary treats
