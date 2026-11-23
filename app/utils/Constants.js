@@ -71,6 +71,7 @@ export const GET_CHARGERS = "GET.CHARGERS";
 export const GET_PENDING_ORDERS = "GET.PENDING.ORDERS";
 export const ADD_CHARGER_TREAT = "ADD.CHARGER.TREAT";
 export const CHANGE_PASSWORD = "CHANGE.PASSWORD";
+export const GET_SERVER_TIME = "GET.SERVER.TIME";
 
 // Small helper so screens can adapt layouts for Arabic.
 export const isWeb = Platform.OS === "web";

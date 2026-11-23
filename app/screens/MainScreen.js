@@ -556,7 +556,17 @@ export default function MainScreen({ navigation, route }) {
     // ------------------------------------------------------------------
     // Printing
     // ------------------------------------------------------------------
-    const buildPrintHtml = ({ qrSvg, barcodeSvg }) => {
+    // Timestamp shown on receipts. The server time is preferred so the
+    // printed date/time matches the service, falling back to the device time.
+    const getReceiptTimestamp = async () => {
+        const serverTime = await ServerOperations.getServerTime();
+        const time = String(serverTime?.res ?? '').trim();
+        const date = String(serverTime?.date ?? '').trim();
+        const label = [date, time].filter(Boolean).join(' ');
+        return label || new Date().toLocaleString(isArabic ? 'ar' : 'en-GB');
+    };
+
+    const buildPrintHtml = ({ qrSvg, barcodeSvg, printedAt }) => {
         const direction = isArabic ? 'rtl' : 'ltr';
         // Keep the Code 128 bars square-ish on the 58mm roll (~52mm usable).
         const barcodeHeightMm =
@@ -587,7 +597,7 @@ export default function MainScreen({ navigation, route }) {
 </head>
 <body>
   <div class="logo-wrap"><img src="${LOGO_DATA_URL}" alt="${i18n.t('appTitle')}" /></div>
-  <div class="sub">${i18n.t('resultTitle')} &middot; ${new Date().toLocaleString(isArabic ? 'ar' : 'en-GB')}</div>
+  <div class="sub">${i18n.t('resultTitle')} &middot; ${escapeHtml(printedAt)}</div>
   <div class="card">
     <div class="code-wrap">
       <div class="qr-code">${qrSvg || ''}</div>
@@ -600,7 +610,7 @@ export default function MainScreen({ navigation, route }) {
 </html>`;
     };
 
-    const buildTreatPrintHtml = ({ serial, car, dateTime, count }) => {
+    const buildTreatPrintHtml = ({ serial, car, dateTime, count, printedAt }) => {
         const direction = isArabic ? 'rtl' : 'ltr';
         const rows = [
             [i18n.t('carNumber'), car],
@@ -640,9 +650,7 @@ export default function MainScreen({ navigation, route }) {
 <body>
   <div class="logo-wrap"><img src="${LOGO_DATA_URL}" alt="${i18n.t('appTitle')}" /></div>
   <h1 class="treat-title">${i18n.t('treatSectionTitle')}</h1>
-  <div class="sub" style="text-align:center">${new Date().toLocaleString(
-      isArabic ? 'ar' : 'en-GB'
-  )}</div>
+  <div class="sub" style="text-align:center">${escapeHtml(printedAt)}</div>
   <div class="card">
     <div class="serial-box">
       <div class="serial-label">${i18n.t('treatSerial')}</div>
@@ -654,9 +662,8 @@ export default function MainScreen({ navigation, route }) {
 </html>`;
     };
 
-    const buildTodayOrdersPrintHtml = (ordersToPrint, totals, user) => {
+    const buildTodayOrdersPrintHtml = (ordersToPrint, totals, user, printedAt) => {
         const direction = isArabic ? 'rtl' : 'ltr';
-        const printedAt = new Date().toLocaleString(isArabic ? 'ar' : 'en-GB');
         const totalKwh = totals.kwh.toLocaleString(isArabic ? 'ar' : 'en-GB', {
             maximumFractionDigits: 6,
         });
@@ -785,7 +792,10 @@ export default function MainScreen({ navigation, route }) {
                 { kwh: 0, totalAmount: 0 }
             );
 
-            await printDocument(buildTodayOrdersPrintHtml(ordersWithTotals, totals, displayName));
+            const printedAt = await getReceiptTimestamp();
+            await printDocument(
+                buildTodayOrdersPrintHtml(ordersWithTotals, totals, displayName, printedAt)
+            );
         } catch (error) {
             console.error('Printing today orders failed:', error);
             Commons.okMsgAlert(i18n.t('orderTotalsLoadFailed'));
@@ -821,10 +831,12 @@ export default function MainScreen({ navigation, route }) {
             }
 
             // Embed the QR code and the Code 128 barcode as inline SVG.
+            const printedAt = await getReceiptTimestamp();
             await printDocument(
                 buildPrintHtml({
                     qrSvg: qrModel ? qrModel.svg : null,
                     barcodeSvg: barcodeModel ? barcodeModel.svg : null,
+                    printedAt,
                 })
             );
         } finally {
@@ -871,12 +883,14 @@ export default function MainScreen({ navigation, route }) {
 
             // The serial is issued by the service and printed on the voucher.
             setTreatSerial(saved.SERIAL);
+            const printedAt = await getReceiptTimestamp();
             await printDocument(
                 buildTreatPrintHtml({
                     serial: saved.SERIAL,
                     car,
                     dateTime: treatDateTime.trim(),
                     count,
+                    printedAt,
                 })
             );
         } finally {

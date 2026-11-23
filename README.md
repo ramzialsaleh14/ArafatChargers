@@ -27,7 +27,11 @@ app shows the charger information returned by the server.
 
 ```js
 getChargerInfo(user, barcode) // -> { QRCODE, KWH, TOTAL_AMOUNT, ERROR, PAID }
+getServerTime()              // -> { res: "12:20", date: "23/11/2026" }
 ```
+
+`getServerTime` is used for the date/time printed on receipts so the printed
+timestamp matches the server (falling back to the device time on failure).
 
 Request parameters sent to the gateway:
 

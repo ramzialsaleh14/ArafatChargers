@@ -486,6 +486,55 @@ export const getTodayOrders = async (user) => {
 };
 
 /**
+ * Returns the server's current time as `{ res, date }` where `res` is the
+ * "HH:mm" clock time and `date` is "dd/MM/yyyy".
+ *
+ * Expected JSON payload:
+ *   { res: "12:20", date: "23/11/2026" }
+ *
+ * On any failure it falls back to the device time in the same shape so
+ * callers (printed receipts) always get a usable timestamp.
+ */
+export const getServerTime = async () => {
+  try {
+    /* Request params */
+    let params = "";
+    params += `action=${Constants.GET_SERVER_TIME}`;
+
+    console.log("Server time request params:", params);
+
+    /* Send request */
+    const response = await pickHttpRequest(params);
+
+    /* Check response */
+    if (response !== Constants.networkError_code && response && response.ok) {
+      try {
+        const jsonResult = await response.json();
+        console.log("Server time JSON result:", jsonResult);
+        if (jsonResult && (jsonResult.res || jsonResult.date)) {
+          return {
+            res: jsonResult.res != null ? String(jsonResult.res) : "",
+            date: jsonResult.date != null ? String(jsonResult.date) : "",
+          };
+        }
+      } catch (jsonError) {
+        console.error("Failed to parse server time response:", jsonError);
+      }
+    }
+  } catch (error) {
+    console.error("Get server time request failed:", error);
+  }
+
+  /* Fallback to device time */
+  const now = new Date();
+  const pad2 = (value) => String(value).padStart(2, "0");
+  return {
+    res: `${pad2(now.getHours())}:${pad2(now.getMinutes())}`,
+    date: `${pad2(now.getDate())}/${pad2(now.getMonth() + 1)}/${now.getFullYear()}`,
+  };
+};
+
+/**
  * Creates a complimentary treat (ضيافة) for a car at the given date and time.
  *
  * `dateTime` is formatted as yyyy-MM-dd HH:mm:ss and `numOfTreats` is the
